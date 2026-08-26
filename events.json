@@ -84,7 +84,7 @@
             "status": "filled",
             "filled_qty": 1,
             "avg": 1.68,
-            "note": "position_intent=buy_to_close. Flat. Spine exit, no take-profit cap."
+            "note": "position_intent=buy_to_close. Flat. Harvest when the reason to hold is gone."
           }
         }
       ]

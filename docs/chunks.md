@@ -6,8 +6,8 @@ Trunk: [`grand-plan.md`](grand-plan.md). Each chunk is independently shippable. 
 
 ## 1. Policy kernel
 - Files: `filltrue/policy.py`, `tests/test_policy.py`
-- Built: entry band (put, |Δ| 0.16–0.20, DTE 30–60) + spine exits (stop 1.5×, trail 30/15, 21 DTE). No take-profit cap.
-- Done-when: tests refuse 50/80/95% “bank it”; stop and time-stop fire; 22 DTE holds.
+- Built: entry band (put, |Δ| 0.16–0.20, DTE 30–60) + spine exits (stop 1.5×, trail 30/15, 21 DTE, thesis-dead-while-green). Harvest at the right time — not a 50% coupon, not never.
+- Done-when: 50/80/95% with a live setup still holds; thesis-dead-while-green closes; stop and time-stop fire; 22 DTE holds.
 
 ## 2. Fill-sync + ledger
 - Files: `filltrue/ledger.py`, `filltrue/gate.py`, `tests/test_ledger.py`, `tests/test_ghost.py`

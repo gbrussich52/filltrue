@@ -3,7 +3,7 @@
 **Window:** 2026-08-28 15:00 UTC → 2026-09-04 15:00 UTC  
 **Track:** Options Alpha Agents  
 **Money:** paper only. No live capital.  
-**Done-when:** judges can clone the public repo, run tests with no network, open a demo URL, and see an agent that (1) talks to Alpaca MCP/API, (2) sells a labeled 16–20Δ CSP on a limit, (3) **does not record OPEN unless the broker filled**, (4) exits on spine rules only (stop / trail / 21 DTE — no take-profit cap).
+**Done-when:** judges can clone the public repo, run tests with no network, open a demo URL, and see an agent that (1) talks to Alpaca MCP/API, (2) sells a labeled CSP on a limit, (3) **does not record OPEN unless the broker filled**, (4) exits when the reason to hold is gone (stop / trail / thesis-dead-while-green / time — contest also harvests into the deadline).
 
 ## Hunt
 - Topic: Alpaca MCP options trading agents for this hackathon
@@ -13,7 +13,7 @@
   - `alpacahq/alpaca-mcp-server` — **adopt** as the tool surface judges expect
   - our `automated-trading` sleeve — **adapt** exit spine + session gates; **do not** dump the $100k book or ghost state
 - Decision: **adapt** lab rules + **build** fill-sync (the lab’s real bug) as the public agent
-- What we take: `decide_exit` (no upside cap), limit-only off-hours, labeled OPEN. What we fix: record OPEN on submit (expired DAY limits became “open shorts”).
+- What we take: `decide_exit` (harvest when the reason to hold is gone), limit-only off-hours, labeled OPEN. What we fix: record OPEN on submit (expired DAY limits became “open shorts”).
 
 ## Why this wins
 Everyone else will prompt an LLM to pick a ticker. We ship the thing Alpaca MCP cannot do for you: **policy + broker-truth**. We already paid tuition on ghost CSPs (three “open” shorts, fill qty 0). The hackathon product *is* that lesson.
