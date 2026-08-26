@@ -88,7 +88,12 @@ def naive_open_on_submit(order_id: str, symbol: str) -> dict:
 def run_ghost() -> dict:
     """DAY limit expires unfilled. FillTrue stays flat. Naive would show OPEN."""
     broker = FakeBroker(is_open=True, fill_mode="working", chain=demo_chain())
-    agent = Agent(broker, Ledger(), as_of=AS_OF, env={"ALPACA_PAPER_TRADE": "true"})
+    agent = Agent(
+        broker,
+        Ledger(),
+        as_of=AS_OF,
+        env={"ALPACA_PAPER_TRADE": "true", "FILLTRUE_CONTEST": "false"},
+    )
     submit = agent.open_csp(demo_candidate())
     naive = naive_open_on_submit(submit.order_id or "", SYMBOL)
     broker.expire(submit.order_id or "")
@@ -111,7 +116,12 @@ def run_fill_then_stop() -> dict:
         chain=demo_chain(),
         marks={SYMBOL: 1.68},
     )
-    agent = Agent(broker, Ledger(), as_of=AS_OF, env={"ALPACA_PAPER_TRADE": "true"})
+    agent = Agent(
+        broker,
+        Ledger(),
+        as_of=AS_OF,
+        env={"ALPACA_PAPER_TRADE": "true", "FILLTRUE_CONTEST": "false"},
+    )
     submit = agent.open_csp(demo_candidate())
     broker.fill(submit.order_id or "", price=1.12)
     sync_events = agent.sync()

@@ -6,6 +6,15 @@
 **Repo:** https://github.com/gbrussich52/filltrue  
 **Demo:** https://gbrussich52.github.io/filltrue/
 
+## Official submission rules (Alpaca HQ 2026-08-25)
+
+1. Dedicated competition paper account (one per email) — **new $100k paper, not the lab**.
+2. Starting balance $100,000.
+3. One-page write-up (AI logic, risk gates, Alpaca infra) — [`ONE-PAGER.md`](ONE-PAGER.md).
+4. Strategy must include options.
+
+Judged on **P&L and creativity/engagement**. Contest overlay: [`CONTEST-RULES.md`](CONTEST-RULES.md).
+
 ## What we built
 
 A paper-only CSP agent whose differentiator is **broker-truth**. Alpaca MCP will place the order. FillTrue will not call it a position until the broker filled it.

@@ -5,7 +5,21 @@ from __future__ import annotations
 from datetime import date
 from uuid import uuid4
 
+import os
+
 from filltrue.broker import Broker
+from filltrue.contest import (
+    DELTA_HI as CONTEST_DELTA_HI,
+    DELTA_LO as CONTEST_DELTA_LO,
+    DTE_MAX as CONTEST_DTE_MAX,
+    DTE_MIN as CONTEST_DTE_MIN,
+    DTE_TARGET as CONTEST_DTE_TARGET,
+    MAX_TICKETS,
+    TARGET_DELTA as CONTEST_TARGET_DELTA,
+    contest_decide_exit,
+    contest_entry_ok,
+    refuse_lab_book,
+)
 from filltrue.gate import close_intent, gate_order, open_intent, paper_mode_ok
 from filltrue.ledger import Ledger
 from filltrue.occ import parse_occ
@@ -25,28 +39,53 @@ class Agent:
         ledger: Ledger | None = None,
         *,
         underlying: str = "IWM",
-        max_open: int = 1,
+        max_open: int | None = None,
         as_of: date | None = None,
         env: dict[str, str] | None = None,
     ) -> None:
         self.broker = broker
         self.ledger = ledger or Ledger()
         self.underlying = underlying
-        self.max_open = max_open
         self.as_of = as_of or date.today()
         self.env = env
+        if max_open is None:
+            self.max_open = MAX_TICKETS if self.contest_mode else 1
+        else:
+            self.max_open = max_open
+
+    @property
+    def contest_mode(self) -> bool:
+        src = self.env if self.env is not None else os.environ
+        flag = (src.get("FILLTRUE_CONTEST") or "true").strip().lower()
+        return flag not in {"0", "false", "no"}
 
     def clock(self) -> Clock:
         return self.broker.clock()
 
     def propose(self) -> Candidate | None:
         chain = self.broker.chain(self.underlying)
+        if self.contest_mode:
+            return pick_csp(
+                chain,
+                as_of=self.as_of,
+                underlying=self.underlying,
+                delta_lo=CONTEST_DELTA_LO,
+                delta_hi=CONTEST_DELTA_HI,
+                dte_lo=CONTEST_DTE_MIN,
+                dte_hi=CONTEST_DTE_MAX,
+                target_delta=CONTEST_TARGET_DELTA,
+                target_dte=CONTEST_DTE_TARGET,
+            )
         return pick_csp(chain, as_of=self.as_of, underlying=self.underlying)
 
     def open_csp(self, candidate: Candidate | None = None) -> Event:
         paper = paper_mode_ok(self.env)
         if not paper.ok:
             return Event(kind="REJECT", symbol="", detail=paper.reason)
+
+        contaminated = refuse_lab_book([p.symbol for p in self.broker.positions()])
+        if not contaminated.ok:
+            return Event(kind="REJECT", symbol="", detail=contaminated.reason)
 
         if len(self.ledger.open_positions()) >= self.max_open:
             return Event(
@@ -59,7 +98,10 @@ class Agent:
         if cand is None:
             return Event(kind="SKIP", symbol=self.underlying, detail="no candidate")
 
-        entry = gate_entry(cand)
+        if self.contest_mode:
+            entry = contest_entry_ok(dte=cand.dte, abs_delta=abs(cand.delta))
+        else:
+            entry = gate_entry(cand)
         if not entry.ok:
             return Event(kind="SKIP", symbol=cand.symbol, detail=entry.reason)
 
@@ -102,13 +144,23 @@ class Agent:
         for pos in list(self.ledger.open_positions()):
             dte = (pos.expiration - self.as_of).days
             mark = self.broker.quote_mark(pos.symbol)
-            decision = decide_exit(
-                credit=pos.credit,
-                mark=mark,
-                dte=dte,
-                peak_profit_frac=pos.peak_profit_frac,
-            )
-            pos.peak_profit_frac = float(decision["peak_profit_frac"] or 0.0)
+            if self.contest_mode:
+                decision = contest_decide_exit(
+                    side="credit",
+                    entry=pos.credit,
+                    mark=mark,
+                    dte=dte,
+                    as_of=self.as_of,
+                )
+                decision.setdefault("peak_profit_frac", pos.peak_profit_frac)
+            else:
+                decision = decide_exit(
+                    credit=pos.credit,
+                    mark=mark,
+                    dte=dte,
+                    peak_profit_frac=pos.peak_profit_frac,
+                )
+            pos.peak_profit_frac = float(decision.get("peak_profit_frac") or pos.peak_profit_frac)
             if not decision["should_close"]:
                 events.append(
                     Event(

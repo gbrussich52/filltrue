@@ -14,7 +14,7 @@ def _agent(broker: FakeBroker) -> Agent:
         broker,
         Ledger(),
         as_of=AS_OF,
-        env={"ALPACA_PAPER_TRADE": "true"},
+        env={"ALPACA_PAPER_TRADE": "true", "FILLTRUE_CONTEST": "false"},
     )
 
 
@@ -45,7 +45,7 @@ def test_stop_uses_buy_to_close_not_buy_to_open():
 def test_live_env_cannot_open():
     broker = FakeBroker(is_open=True, fill_mode="fill", chain=demo_chain())
     agent = Agent(
-        broker, Ledger(), as_of=AS_OF, env={"ALPACA_PAPER_TRADE": "false"}
+        broker, Ledger(), as_of=AS_OF, env={"ALPACA_PAPER_TRADE": "false", "FILLTRUE_CONTEST": "false"}
     )
     event = agent.open_csp(demo_candidate())
     assert event.kind == "REJECT"

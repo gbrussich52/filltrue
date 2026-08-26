@@ -89,7 +89,7 @@ def test_naive_would_have_shown_open():
 def test_agent_ghost_path_end_to_end():
     broker = FakeBroker(is_open=True, fill_mode="working", chain=demo_chain())
     agent = Agent(
-        broker, Ledger(), env={"ALPACA_PAPER_TRADE": "true"},
+        broker, Ledger(), env={"ALPACA_PAPER_TRADE": "true", "FILLTRUE_CONTEST": "false"},
         as_of=demo_candidate().expiration.replace(year=2026, month=8, day=25),
     )
     # as_of in replay is 2026-08-25; don't depend on today()

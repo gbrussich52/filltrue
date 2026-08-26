@@ -30,6 +30,29 @@ FillTrue OPEN count     : 0
 
 That is the product.
 
+## Contest vs lab (read this)
+
+The 90-day dual-momentum / 16–20Δ CSP lab is a **different paper account** and a different game. Official Alpaca rules: dedicated $100k competition paper account, options must be in the strategy, judged on **P&L + creativity**.
+
+| | Lab book | This repo (contest) |
+|---|---|---|
+| Account | existing ~$104k paper, do **not** reset | **new** paper account, $100k |
+| Horizon | 90-day gate | ~5 RTH sessions |
+| Tenor / delta | 45 DTE / 16–20Δ | **14 DTE / 30Δ** |
+| Take profit | forbidden | **required** (bank 50% credit) |
+| Structure | naked CSP | defined-risk default |
+
+Signals we keep: SPY 200d crash brake, dual-momentum regime, IVP, fill-sync.
+
+```bash
+python -m filltrue contest-plan --spy-above-200 --ivp 70
+python -m filltrue contest-plan --no-spy-above-200 --ivp 70   # cash
+```
+
+How to open the account (do not touch the lab): Alpaca dashboard → paper account number (upper left) → **Open New Paper Account** → $100,000 → new API keys into `.env`.
+
+Full write-up: [`docs/CONTEST-RULES.md`](docs/CONTEST-RULES.md) · required one-pager: [`docs/ONE-PAGER.md`](docs/ONE-PAGER.md)
+
 ## What it trades
 
 - Underlying: IWM

@@ -25,6 +25,15 @@ def test_payload_cli(capsys):
     assert "limit" in out
 
 
+def test_contest_plan_cli(capsys):
+    assert main(["contest-plan", "--spy-above-200", "--ivp", "70"]) == 0
+    out = capsys.readouterr().out
+    assert "bull_put_credit" in out
+    assert main(["contest-plan", "--no-spy-above-200", "--ivp", "70"]) == 0
+    out = capsys.readouterr().out
+    assert "cash" in out
+
+
 def test_print_report_matches_cli():
     report = print_report(text=False)
     assert "OPEN is a fill" in report

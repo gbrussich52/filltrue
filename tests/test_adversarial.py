@@ -25,7 +25,7 @@ def test_negative_price_is_not_a_fill():
 def test_double_sync_does_not_duplicate_open():
     broker = FakeBroker(is_open=True, fill_mode="working", chain=demo_chain())
     agent = Agent(
-        broker, Ledger(), as_of=AS_OF, env={"ALPACA_PAPER_TRADE": "true"}
+        broker, Ledger(), as_of=AS_OF, env={"ALPACA_PAPER_TRADE": "true", "FILLTRUE_CONTEST": "false"}
     )
     submit = agent.open_csp(demo_candidate())
     broker.fill(submit.order_id, price=1.12)
@@ -39,7 +39,7 @@ def test_double_sync_does_not_duplicate_open():
 def test_lie_mode_status_filled_qty_zero():
     broker = FakeBroker(is_open=True, fill_mode="lie", chain=demo_chain())
     agent = Agent(
-        broker, Ledger(), as_of=AS_OF, env={"ALPACA_PAPER_TRADE": "true"}
+        broker, Ledger(), as_of=AS_OF, env={"ALPACA_PAPER_TRADE": "true", "FILLTRUE_CONTEST": "false"}
     )
     event = agent.open_csp(demo_candidate())
     assert event.kind != "OPEN"
