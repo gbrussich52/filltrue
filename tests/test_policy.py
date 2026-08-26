@@ -1,4 +1,4 @@
-"""Exits: no upside cap — only downside mitigation (trail, stop, time)."""
+"""Exits: harvest at the right time — not a coupon, not never."""
 
 from __future__ import annotations
 
@@ -41,6 +41,18 @@ def test_take_profit_only_is_not_a_rule():
     d = decide_exit(credit=2.0, mark=0.01, dte=40, peak_profit_frac=0.995)
     assert d["should_close"] is False
     assert d["rule"] != "take_profit"
+
+
+def test_green_invalidation_is_the_right_time():
+    d = decide_exit(
+        credit=2.0,
+        mark=1.6,
+        dte=40,
+        peak_profit_frac=0.20,
+        conditions_still_fit=False,
+    )
+    assert d["should_close"] is True
+    assert d["rule"] == "condition_invalidation"
 
 
 def test_trail_only_when_path_turns():

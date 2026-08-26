@@ -19,6 +19,19 @@ from filltrue.contest import (
 from filltrue.policy import decide_exit as lab_decide_exit
 
 
+def test_contest_harvests_when_thesis_dies_green():
+    d = contest_decide_exit(
+        side="credit",
+        entry=2.0,
+        mark=1.6,
+        dte=14,
+        as_of=date(2026, 9, 1),
+        conditions_still_fit=False,
+    )
+    assert d["should_close"] is True
+    assert d["rule"] == "condition_invalidation"
+
+
 def test_lab_holds_50pct_credit_contest_banks_it():
     lab = lab_decide_exit(credit=2.0, mark=1.0, dte=40, peak_profit_frac=0.5)
     assert lab["should_close"] is False

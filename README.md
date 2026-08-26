@@ -39,7 +39,7 @@ The 90-day dual-momentum / 16–20Δ CSP lab is a **different paper account** an
 | Account | existing ~$104k paper, do **not** reset | **new** paper account, $100k |
 | Horizon | 90-day gate | ~5 RTH sessions |
 | Tenor / delta | 45 DTE / 16–20Δ | **14 DTE / 30Δ** |
-| Take profit | forbidden | **required** (bank 50% credit) |
+| Take profit | **when the reason to hold is gone** (trail, thesis dead, 21 DTE) — not a 50% coupon, not never | **same, plus deadline** (bank 50% / Friday flatten) |
 | Structure | naked CSP | defined-risk default |
 
 Signals we keep: SPY 200d crash brake, dual-momentum regime, IVP, fill-sync.
@@ -59,7 +59,7 @@ Full write-up: [`docs/CONTEST-RULES.md`](docs/CONTEST-RULES.md) · required one-
 - Structure: naked cash-secured put
 - Band: |delta| 0.16–0.20, DTE 30–60 (target 45 / 18Δ)
 - Entry: limit at bid, TIF DAY, `position_intent=sell_to_open`
-- Exits (no take-profit cap):
+- Exits (harvest at the right time):
   - stop when mark ≥ 1.5× credit
   - trail giveback (arm 30%, giveback 15 points of credit)
   - 21 DTE gamma stop
@@ -110,7 +110,7 @@ After every `place_option_order`:
 
 ```
 filltrue/          policy, ledger, picker, gate, agent (stdlib only)
-tests/             ghost case, leftover-long, take-profit refusal, session
+tests/             ghost case, leftover-long, harvest-at-right-time, session
 prompts/SYSTEM.md  MCP agent prompt
 index.html         public demo
 demo/app.py        Streamlit (optional extra)

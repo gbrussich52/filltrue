@@ -51,7 +51,7 @@ A 45 DTE 16–20Δ IWM CSP on $100k is a scientific instrument. Over 5 sessions:
 
 - Theta is a rounding error vs $100k.
 - One contract of premium (~$100) cannot win a P&L ranking.
-- “No take-profit” is correct for a 90-day gate and **wrong** for a snapshot contest. Sitting on a winner through Friday is how you donate mark-to-market.
+- The lab does **take profit** — when the path turns, the thesis dies while green, or 21 DTE hits. It does not use a 50% coupon. The contest *adds* a deadline harvest (50% / Friday flatten) because the score is a snapshot. Sitting on a winner through Friday is how you donate mark-to-market.
 
 ## Signals we keep (E1 / E2 brain)
 
@@ -69,7 +69,7 @@ A 45 DTE 16–20Δ IWM CSP on $100k is a scientific instrument. Over 5 sessions:
 | DTE | 30–60 (target 45) | **7–21 (target 14)** — no 0DTE |
 | Delta | 16–20 | **25–35** |
 | Structure | naked CSP | **defined-risk spreads default** (bull put / call debit) |
-| Take profit | forbidden | **required** — bank 50% of credit, ~80% on debit |
+| Take profit | right time (trail / thesis dead / 21 DTE) | **same + deadline** — bank 50% of credit, ~80% on debit, Friday flatten |
 | Flatten | 21 DTE | **contest end / DTE≤3** |
 | Size | 1 lot | **2% of equity at risk per ticket**, max 4 tickets, 8% gross, 20 contracts cap |
 | Underlying | IWM | IWM (liquid). SPY/QQQ only if IWM chain is empty |

@@ -1,11 +1,13 @@
 """Hackathon contest overlay. Different game from the 90-day lab.
 
-Lab (automated-trading): 45 DTE 16–20Δ CSPs, no take-profit, scientific gate.
+Lab (automated-trading): 45 DTE 16–20Δ CSPs, harvest at the right time
+(trail / thesis-dead-while-green / 21 DTE) — not a 50% coupon, not never.
 Contest (this file): ~5 RTH sessions, $100k fresh paper, judged on P&L.
+The *right time* here includes a snapshot harvest (50% of credit / Friday flatten).
 
 Signals we KEEP: SPY 200d crash brake, dual-momentum risk-on/off, IVP bucket,
-fill-sync. What CHANGES: tenor, delta, defined-risk default, take-profit,
-Friday flatten, size.
+fill-sync. What CHANGES: tenor, delta, defined-risk default, deadline-aware
+harvest, size.
 
 Official Alpaca submission rules (tweet 2092250645458047162, 2026-08-25):
 1. Dedicated competition paper account (one per email)
@@ -161,8 +163,14 @@ def contest_decide_exit(
     dte: int,
     as_of: date | None = None,
     contest_end: date = CONTEST_END,
+    conditions_still_fit: bool | None = None,
 ) -> dict[str, Any]:
-    """Contest exits. Take-profit IS a rule here. It is not a rule in the lab."""
+    """Contest exits. Harvest when the reason to hold is gone.
+
+    Deadline is a reason (snapshot P&L). 50% of credit is a reason here
+    because the clock is 5 sessions, not because 50% is sacred.
+    Thesis-dead-while-green is always a reason.
+    """
     today = as_of or date.today()
     days_left = (contest_end - today).days
     if days_left <= 0 or dte <= FLATTEN_DTE:
@@ -176,6 +184,12 @@ def contest_decide_exit(
 
     if side == "credit":
         pf = (entry - mark) / entry
+        if conditions_still_fit is False and pf > 0:
+            return {
+                "should_close": True,
+                "rule": "condition_invalidation",
+                "reason": f"thesis dead while green: profit {pf:.0%}",
+            }
         if mark + 1e-9 >= entry * CREDIT_STOP_MULT:
             return {
                 "should_close": True,

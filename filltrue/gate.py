@@ -83,13 +83,6 @@ def gate_order(
                 "open_type",
             )
 
-    if "take_profit" in intent.reason or intent.reason == "bank_it":
-        return GateResult(
-            False,
-            "no take-profit cap — spine exits only",
-            "take_profit_refused",
-        )
-
     return GateResult(True, "allowed", "ok")
 
 

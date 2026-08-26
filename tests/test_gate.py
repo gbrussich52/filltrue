@@ -1,4 +1,4 @@
-"""Session, paper-only, leftover-long, take-profit refusal."""
+"""Session, paper-only, leftover-long. Take-profit closes are allowed."""
 
 from __future__ import annotations
 
@@ -58,18 +58,17 @@ def test_close_intent_helper_is_buy_to_close():
     assert r.ok
 
 
-def test_take_profit_refused():
+def test_take_profit_close_allowed():
     intent = OrderIntent(
         symbol="X",
         side="buy",
         qty=1,
         type="market",
         position_intent="buy_to_close",
-        reason="take_profit_50",
+        reason="close:take_profit",
     )
     r = gate_order(intent, OPEN, env={"ALPACA_PAPER_TRADE": "true"})
-    assert not r.ok
-    assert r.code == "take_profit_refused"
+    assert r.ok
 
 
 def test_live_env_blocks_even_valid_intent():

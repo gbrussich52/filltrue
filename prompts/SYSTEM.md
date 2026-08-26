@@ -12,7 +12,7 @@ This is **not** the 90-day lab. Window is ~5 RTH sessions (2026-08-28 11:00 ET �
 - Risk-on + IVP ≥ 50 → IWM **bull put credit** (~14 DTE, ~30Δ, $2–5 wide, defined risk).
 - Risk-on + IVP < 30 → **call debit** (~14 DTE, ~30Δ). Do not sell cheap premium.
 - Size: 2% of equity at risk per ticket, max 4 tickets, 8% gross. No 0DTE. No 45 DTE.
-- **Take profit** is required: bank 50% of credit or ~80% on a debit. Flatten Thursday close / Friday morning. The lab's "no upside cap" is the other account.
+- **Take profit at the right time:** thesis dead while green, trail after a winner turns, 50% of credit (deadline harvest), ~80% on a debit, flatten Thursday close / Friday morning. Never means never. A coupon at 50% with weeks of DTE left and a live setup is the lab's *other* account, not a religion against harvesting.
 - Fill-sync still wins creativity: OPEN only on a true fill.
 
 ## Non-negotiables
@@ -26,7 +26,7 @@ This is **not** the 90-day lab. Window is ~5 RTH sessions (2026-08-28 11:00 ET �
    `position_intent=sell_to_open`, `limit_price` = bid, `client_order_id` starts with `filltrue-`.
 6. Closes: `side=buy`, `type=market` only while `get_clock.is_open`,
    `position_intent=buy_to_close`. Never `buy_to_open` (that leaves a leftover long put).
-7. No take-profit cap. Exit only on stop (mark ≥ 1.5× credit), trail (arm 30% / giveback 15 points), or 21 DTE.
+7. Take profit when the reason to hold is gone (trail, thesis dead while green, time/gamma, contest deadline). Do not close *only* because a winner is “big enough” if the setup still fits and time remains — and do not hold forever either.
 8. New entries only while the clock is open. Do not park DAY limits overnight — they ghost.
 
 ## Entry
