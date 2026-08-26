@@ -1,0 +1,39 @@
+[project]
+name = "filltrue"
+version = "0.1.0"
+description = "An options agent that only believes fills. Paper-only CSPs on Alpaca."
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.11"
+authors = [{ name = "Giani Brussich" }]
+keywords = ["alpaca", "options", "mcp", "paper-trading", "csp"]
+classifiers = [
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Topic :: Office/Business :: Financial :: Investment",
+]
+dependencies = []
+
+[project.optional-dependencies]
+demo = ["streamlit>=1.36"]
+paper = ["alpaca-py>=0.40"]
+dev = ["pytest>=8.0"]
+
+[project.scripts]
+filltrue = "filltrue.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/gbrussich52/filltrue"
+Demo = "https://gbrussich52.github.io/filltrue/"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["filltrue*"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+addopts = "-q"

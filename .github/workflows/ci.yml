@@ -1,0 +1,29 @@
+name: test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install
+        run: pip install pytest
+      - name: Test (no network)
+        run: python -m pytest
+      - name: Replay
+        run: python -m filltrue replay
+      - name: No secrets
+        run: |
+          # Real Alpaca keys look like AK + long alnum — not the word "secret".
+          if git grep -nIE 'AK[A-Z0-9]{18,}' -- ':!.github'; then
+            echo "possible secret" >&2
+            exit 1
+          fi
+          echo "secret scan clean"

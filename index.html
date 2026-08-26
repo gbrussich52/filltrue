@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>FillTrue — an options agent that only believes fills</title>
+  <meta name="description" content="Paper-only cash-secured puts on Alpaca. OPEN only when the broker filled." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=Sora:wght@400;600&family=Syne:wght@700;800&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --walnut: #1a1612;
+      --manila: #f2e4c4;
+      --manila-dark: #e6d3a8;
+      --stamp: #9e1b14;
+      --ink: #1f2a36;
+      --foil: #b8923a;
+      --working: #3d5c4e;
+      --void: #6b1d1d;
+      --paper: #efe7d6;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; background: var(--walnut); color: var(--paper); }
+    body {
+      font-family: Sora, system-ui, sans-serif;
+      min-height: 100vh;
+      padding: 32px 20px 80px;
+    }
+    .wrap { max-width: 1080px; margin: 0 auto; }
+    .eyebrow {
+      font-family: "IBM Plex Mono", monospace;
+      font-size: 11px;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--foil);
+    }
+    h1 {
+      font-family: Syne, sans-serif;
+      font-weight: 800;
+      font-size: clamp(2.4rem, 6vw, 4.4rem);
+      line-height: 0.92;
+      margin: 12px 0 16px;
+      letter-spacing: -0.03em;
+    }
+    h1 span { color: var(--foil); }
+    .lede {
+      max-width: 38rem;
+      font-size: 1.05rem;
+      line-height: 1.55;
+      color: #d9d0bf;
+    }
+    .row {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin: 28px 0 40px;
+      align-items: center;
+    }
+    button, .btn {
+      font-family: Sora, sans-serif;
+      font-weight: 600;
+      border: 0;
+      cursor: pointer;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 18px;
+      border-radius: 999px;
+    }
+    #run {
+      background: var(--foil);
+      color: var(--walnut);
+    }
+    #run:focus-visible, .btn:focus-visible { outline: 2px solid var(--manila); outline-offset: 3px; }
+    .btn {
+      background: transparent;
+      color: var(--paper);
+      box-shadow: inset 0 0 0 1px #5c5346;
+    }
+    .stage { margin-top: 8px; }
+    .act-title {
+      font-family: "IBM Plex Mono", monospace;
+      font-size: 12px;
+      color: var(--foil);
+      margin-bottom: 6px;
+    }
+    .act-sub { color: #cfc6b4; margin: 0 0 22px; }
+    .cards {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+    }
+    @media (max-width: 800px) { .cards { grid-template-columns: 1fr; } }
+    .card {
+      background: var(--manila);
+      color: var(--ink);
+      border-radius: 4px 16px 16px 4px;
+      padding: 22px 22px 22px 28px;
+      position: relative;
+      min-height: 280px;
+      box-shadow: 8px 12px 0 rgba(0,0,0,0.35);
+    }
+    .card::before {
+      content: "";
+      position: absolute;
+      left: 0; top: 0; bottom: 0;
+      width: 14px;
+      background:
+        repeating-linear-gradient(
+          to bottom,
+          transparent 0 10px,
+          var(--walnut) 10px 14px
+        );
+      border-right: 1px dashed #c4ae7a;
+    }
+    .who {
+      font-family: "IBM Plex Mono", monospace;
+      font-size: 11px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+    .who.bad { color: var(--stamp); }
+    .who.good { color: var(--working); }
+    .sym {
+      font-family: "IBM Plex Mono", monospace;
+      font-size: 15px;
+      margin: 10px 0 18px;
+      word-break: break-all;
+    }
+    dl {
+      display: grid;
+      grid-template-columns: 110px 1fr;
+      gap: 6px 10px;
+      margin: 0;
+      font-family: "IBM Plex Mono", monospace;
+      font-size: 13px;
+    }
+    dt { color: #6d5d3e; }
+    .note { margin-top: 18px; font-size: 0.92rem; line-height: 1.4; }
+    .stamp {
+      position: absolute;
+      right: 18px;
+      top: 86px;
+      transform: rotate(-12deg);
+      font-family: Syne, sans-serif;
+      font-weight: 800;
+      font-size: 2.1rem;
+      letter-spacing: 0.08em;
+      border: 5px solid;
+      padding: 4px 10px;
+      opacity: 0;
+      pointer-events: none;
+    }
+    .stamp.show { opacity: 0.88; animation: slam 0.28s ease-out; }
+    .stamp.open { color: var(--stamp); border-color: var(--stamp); }
+    .stamp.working { color: var(--working); border-color: var(--working); }
+    .stamp.unfilled, .stamp.void, .stamp.close, .stamp.long {
+      color: var(--void); border-color: var(--void);
+    }
+    @keyframes slam {
+      from { transform: rotate(-12deg) scale(1.35); opacity: 0; }
+      to { transform: rotate(-12deg) scale(1); opacity: 0.88; }
+    }
+    .clock {
+      font-family: "IBM Plex Mono", monospace;
+      margin: 18px 0 8px;
+      color: #cfc6b4;
+      font-size: 13px;
+    }
+    footer {
+      margin-top: 48px;
+      font-size: 13px;
+      color: #9a9183;
+      line-height: 1.5;
+    }
+    footer a { color: var(--foil); }
+    @media (prefers-reduced-motion: reduce) {
+      .stamp.show { animation: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <p class="eyebrow">Alpaca Options Alpha Agents · paper only</p>
+    <h1>An options agent that only believes <span>fills</span>.</h1>
+    <p class="lede">
+      Alpaca MCP will place the order. FillTrue will not call it a short until
+      <code>filled_qty</code> covers the order and the average price is real.
+      Status words are rumors. DAY limits that expire unfilled are not positions.
+    </p>
+    <div class="row">
+      <button type="button" id="run">Run the day</button>
+      <a class="btn" href="https://github.com/gbrussich52/filltrue">GitHub</a>
+      <a class="btn" href="https://github.com/gbrussich52/filltrue#readme">How to clone</a>
+    </div>
+
+    <div class="clock" id="clock">Press Run the day.</div>
+    <div class="stage">
+      <div class="act-title" id="actTitle"></div>
+      <p class="act-sub" id="actSub"></p>
+      <div class="cards">
+        <article class="card" id="naiveCard">
+          <div class="who bad">Naive MCP bot</div>
+          <div class="sym">IWM261016P00220000</div>
+          <dl>
+            <dt>status</dt><dd id="nStatus">—</dd>
+            <dt>filled_qty</dt><dd id="nQty">—</dd>
+            <dt>avg fill</dt><dd id="nAvg">—</dd>
+          </dl>
+          <p class="note" id="nNote">Records OPEN the moment submit returns.</p>
+          <div class="stamp" id="nStamp"></div>
+        </article>
+        <article class="card" id="ftCard">
+          <div class="who good">FillTrue</div>
+          <div class="sym">IWM261016P00220000</div>
+          <dl>
+            <dt>status</dt><dd id="fStatus">—</dd>
+            <dt>filled_qty</dt><dd id="fQty">—</dd>
+            <dt>avg fill</dt><dd id="fAvg">—</dd>
+          </dl>
+          <p class="note" id="fNote">WORKING until the broker filled.</p>
+          <div class="stamp" id="fStamp"></div>
+        </article>
+      </div>
+    </div>
+
+    <footer>
+      Paper trading. Not investment advice. Options can lose more than the credit.
+      Isolated ledger — this demo does not show anyone’s live book.
+      Built for the Alpaca × lablab.ai hackathon.
+      <a href="https://github.com/gbrussich52/filltrue">gbrussich52/filltrue</a>
+    </footer>
+  </div>
+  <script>
+    const DATA = {
+      symbol: "IWM261016P00220000",
+      acts: [
+        {
+          title: "Act I — the ghost",
+          subtitle: "DAY limit, filled_qty 0. Naive records a short. FillTrue does not.",
+          steps: [
+            {
+              t: "15:42:01 ET",
+              title: "submit_order returns an id",
+              naive: { stamp: "OPEN", status: "new", filled_qty: 0, avg: null, note: "Logged OPEN the moment submit returned. filled_qty is 0." },
+              filltrue: { stamp: "WORKING", status: "new", filled_qty: 0, avg: null, note: "Submitted. Not a fill. Ledger stays flat." }
+            },
+            {
+              t: "16:00:00 ET",
+              title: "DAY order expires unfilled",
+              naive: { stamp: "VOID", status: "expired", filled_qty: 0, avg: null, note: "Broker never sold the put. Naive ledger still showed a short." },
+              filltrue: { stamp: "UNFILLED", status: "expired", filled_qty: 0, avg: null, note: "UNFILLED. Never OPEN. No leftover. No fake P&L." }
+            }
+          ]
+        },
+        {
+          title: "Act II — a real fill, then a stop",
+          subtitle: "Same contract. This time the bid is hit. Stop is buy_to_close, not buy_to_open.",
+          steps: [
+            {
+              t: "10:15:12 ET",
+              title: "limit @ 1.12 fills",
+              naive: { stamp: "OPEN", status: "filled", filled_qty: 1, avg: 1.12, note: "A real short. Naive also showed this yesterday, when it was a lie." },
+              filltrue: { stamp: "OPEN", status: "filled", filled_qty: 1, avg: 1.12, note: "filled_qty ≥ qty and avg price > 0. Now it is OPEN." }
+            },
+            {
+              t: "14:03:40 ET",
+              title: "mark 1.68 = 1.5× credit",
+              naive: { stamp: "LONG?", status: "filled", filled_qty: 1, avg: 1.68, note: "A buy without buy_to_close can leave a leftover long put." },
+              filltrue: { stamp: "CLOSE", status: "filled", filled_qty: 1, avg: 1.68, note: "position_intent=buy_to_close. Flat. Spine exit, no take-profit cap." }
+            }
+          ]
+        }
+      ]
+    };
+
+    function paint(side, rec) {
+      const p = side === "n" ? "n" : "f";
+      document.getElementById(p + "Status").textContent = rec.status;
+      document.getElementById(p + "Qty").textContent = String(rec.filled_qty);
+      document.getElementById(p + "Avg").textContent = rec.avg == null ? "—" : rec.avg.toFixed(2);
+      document.getElementById(p + "Note").textContent = rec.note;
+      const stamp = document.getElementById(p + "Stamp");
+      stamp.textContent = rec.stamp;
+      stamp.className = "stamp show " + rec.stamp.toLowerCase().replace("?", "");
+    }
+
+    function showStep(act, step) {
+      document.getElementById("actTitle").textContent = act.title + " · " + step.title;
+      document.getElementById("actSub").textContent = act.subtitle;
+      document.getElementById("clock").textContent = step.t + " — " + step.title;
+      paint("n", step.naive);
+      paint("f", step.filltrue);
+    }
+
+    const queue = [];
+    DATA.acts.forEach((act) => act.steps.forEach((step) => queue.push({ act, step })));
+    let i = 0;
+    let playing = false;
+
+    document.getElementById("run").addEventListener("click", async () => {
+      if (playing) return;
+      playing = true;
+      i = 0;
+      for (const item of queue) {
+        showStep(item.act, item.step);
+        await new Promise((r) => setTimeout(r, 1600));
+      }
+      playing = false;
+    });
+  </script>
+</body>
+</html>

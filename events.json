@@ -1,0 +1,93 @@
+{
+  "symbol": "IWM261016P00220000",
+  "underlying": "IWM",
+  "limit": 1.12,
+  "acts": [
+    {
+      "id": "ghost",
+      "title": "Act I — the ghost",
+      "subtitle": "DAY limit, filled_qty 0. Naive records a short. FillTrue does not.",
+      "steps": [
+        {
+          "t": "15:42:01 ET",
+          "title": "submit_order returns an id",
+          "naive": {
+            "stamp": "OPEN",
+            "status": "new",
+            "filled_qty": 0,
+            "avg": null,
+            "note": "Logged OPEN the moment submit returned. filled_qty is 0."
+          },
+          "filltrue": {
+            "stamp": "WORKING",
+            "status": "new",
+            "filled_qty": 0,
+            "avg": null,
+            "note": "Submitted. Not a fill. Ledger stays flat."
+          }
+        },
+        {
+          "t": "16:00:00 ET",
+          "title": "DAY order expires unfilled",
+          "naive": {
+            "stamp": "VOID",
+            "status": "expired",
+            "filled_qty": 0,
+            "avg": null,
+            "note": "Broker never sold the put. Naive ledger still showed a short."
+          },
+          "filltrue": {
+            "stamp": "UNFILLED",
+            "status": "expired",
+            "filled_qty": 0,
+            "avg": null,
+            "note": "UNFILLED. Never OPEN. No leftover. No fake P&L."
+          }
+        }
+      ]
+    },
+    {
+      "id": "fill",
+      "title": "Act II — a real fill, then a stop",
+      "subtitle": "Same contract. This time the bid is hit. Stop is buy_to_close, not buy_to_open.",
+      "steps": [
+        {
+          "t": "10:15:12 ET",
+          "title": "limit @ 1.12 fills",
+          "naive": {
+            "stamp": "OPEN",
+            "status": "filled",
+            "filled_qty": 1,
+            "avg": 1.12,
+            "note": "Finally a real short. Naive got here by accident yesterday."
+          },
+          "filltrue": {
+            "stamp": "OPEN",
+            "status": "filled",
+            "filled_qty": 1,
+            "avg": 1.12,
+            "note": "filled_qty ≥ qty and avg price > 0. Now it is OPEN."
+          }
+        },
+        {
+          "t": "14:03:40 ET",
+          "title": "mark 1.68 = 1.5× credit",
+          "naive": {
+            "stamp": "LONG?",
+            "status": "filled",
+            "filled_qty": 1,
+            "avg": 1.68,
+            "note": "A buy without buy_to_close can leave a leftover long put."
+          },
+          "filltrue": {
+            "stamp": "CLOSE",
+            "status": "filled",
+            "filled_qty": 1,
+            "avg": 1.68,
+            "note": "position_intent=buy_to_close. Flat. Spine exit, no take-profit cap."
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,9 @@
+FillTrue — an options agent that only believes fills.
+
+MCP bots record OPEN on submit. We paid tuition: DAY limits expired unfilled, ledger showed shorts that never existed.
+
+Paper-only CSPs. Broker truth.
+
+github.com/gbrussich52/filltrue
+
+@AlpacaHQ @lablabai
