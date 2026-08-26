@@ -4,6 +4,7 @@ MCP bots record OPEN on submit. We paid tuition: DAY limits expired unfilled, le
 
 Paper-only CSPs. Broker truth.
 
-github.com/gbrussich52/filltrue
+https://github.com/gbrussich52/filltrue
+https://gbrussich52.github.io/filltrue/
 
 @AlpacaHQ @lablabai
