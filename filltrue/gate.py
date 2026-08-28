@@ -7,6 +7,7 @@ FillTrue will not submit that order.
 
 from __future__ import annotations
 
+import hashlib
 import os
 
 from filltrue.types import Clock, GateResult, OrderIntent, PositionIntent
@@ -24,6 +25,66 @@ def paper_mode_ok(env: dict[str, str] | None = None) -> GateResult:
     return GateResult(True, "paper", "paper")
 
 
+LAB_ETFS = frozenset({"SPY", "VEA", "BND", "BIL", "VTI", "AGG"})
+
+
+def key_fingerprint(api_key: str) -> str:
+    """Stable, non-reversible id for an API key. Never logs the key itself."""
+    return hashlib.sha256(api_key.encode()).hexdigest()[:12]
+
+
+def contest_account_ok(env: dict[str, str] | None = None) -> GateResult:
+    """Refuse to trade an account listed as forbidden.
+
+    The contest requires a dedicated $100k paper account. Pointing it at a
+    research account instead silently contaminates that account's own
+    experiment — options land in its equity denominator and a pre-registered
+    paper gate cannot be re-run once polluted.
+
+    Forbidden accounts are supplied as fingerprints via
+    FILLTRUE_FORBIDDEN_KEY_FINGERPRINTS (comma-separated, from
+    key_fingerprint()), never as keys and never hardcoded: this repo is
+    public and must carry no account identity of its own.
+    """
+    src = env if env is not None else os.environ
+    api_key = (src.get("ALPACA_API_KEY") or "").strip()
+    raw = (src.get("FILLTRUE_FORBIDDEN_KEY_FINGERPRINTS") or "").strip()
+    if not api_key or not raw:
+        # Nothing to check: an unset key cannot reach a broker, and with no
+        # forbidden list there is no account to protect. Missing credentials
+        # are the broker layer's error, not an order-legality failure.
+        return GateResult(True, "no account check applicable", "account_unchecked")
+
+    forbidden = {f.strip().lower() for f in raw.split(",") if f.strip()}
+    fp = key_fingerprint(api_key)
+    if fp in forbidden:
+        return GateResult(
+            False,
+            f"account {fp} is on the forbidden list — this is not the "
+            "dedicated contest account; trading it would contaminate it",
+            "forbidden_account",
+        )
+    return GateResult(True, f"account {fp}", "account_ok")
+
+
+def lab_positions_detected(symbols: list[str]) -> GateResult:
+    """Abort if the account holds research ETFs — it is not a clean account.
+
+    Implements the abort rule the write-up has always claimed. Matching is on
+    the underlying symbol, so an option on SPY does not trip it; a SPY *stock*
+    position does.
+    """
+    hits = sorted({s.strip().upper() for s in symbols} & LAB_ETFS)
+    if hits:
+        return GateResult(
+            False,
+            f"account holds research ETF positions ({', '.join(hits)}) — "
+            "wrong account, refusing to trade",
+            "lab_account",
+        )
+    return GateResult(True, "no research ETF positions", "clean_account")
+
+
 def gate_order(
     intent: OrderIntent,
     clock: Clock,
@@ -33,6 +94,10 @@ def gate_order(
     paper = paper_mode_ok(env)
     if not paper.ok:
         return paper
+
+    account = contest_account_ok(env)
+    if not account.ok:
+        return account
 
     if intent.qty <= 0:
         return GateResult(False, "qty must be > 0", "qty")
