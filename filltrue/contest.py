@@ -289,3 +289,100 @@ def refuse_lab_book(positions: list[str]) -> GateResult:
             "lab_contamination",
         )
     return GateResult(True, "contest account looks clean", "ok")
+
+
+# --- dynamic sizing -------------------------------------------------------
+#
+# No fixed percentage survives contact with five different sessions. Size is
+# derived each entry from three live measurements:
+#
+#   survival_cap()     how much can be risked and still leave capital to act
+#   conviction()       how strongly the signals agree, right now
+#   tournament_tilt()  ahead or behind, with how long left to fix it
+#
+# The product is the fraction of equity risked on this ticket. Nothing here is
+# a preference; each term answers a question with a number.
+
+RETAIN_AFTER_WORST_CASE = 0.25
+
+
+def survival_cap(sessions_remaining: int, retain: float = RETAIN_AFTER_WORST_CASE) -> float:
+    """Largest fraction riskable per entry that survives a worst-case streak.
+
+    A long option can lose 100% of premium, so 'risked' means 'gone'. Losing
+    fraction f on each of k entries leaves (1-f)^k. Requiring that to stay
+    above `retain` gives f <= 1 - retain**(1/k).
+
+    The curve escalates on its own as the contest closes — 24% with five
+    sessions left, 75% on the last one — because capital held back for
+    adaptation is only worth holding while there are decisions left to make.
+    A fully-deployed book cannot act on new information; it can only hold.
+    """
+    k = max(1, int(sessions_remaining))
+    retain = min(max(retain, 1e-6), 0.999999)
+    return 1.0 - retain ** (1.0 / k)
+
+
+def conviction(*, spy_above_200: bool, risk_on: bool, ivp: float) -> float:
+    """Signal agreement in [0,1]. Neutral conditions size small by themselves.
+
+    IV contributes by distance from neutral, not direction: IVP 12 and IVP 88
+    are both strong, they just imply opposite structures. The structure choice
+    is contest_plan's job; this only measures how loud the signal is.
+    """
+    iv_edge = min(1.0, abs(float(ivp) - 50.0) / 50.0)
+    if spy_above_200 and risk_on:
+        trend = 1.0
+    elif spy_above_200 or risk_on:
+        trend = 0.5
+    else:
+        trend = 0.2
+    return round(0.5 * iv_edge + 0.5 * trend, 4)
+
+
+def tournament_tilt(*, equity: float, start_equity: float) -> float:
+    """Scale risk by standing. Second place pays a fraction of first.
+
+    Behind: variance is the only way back, so push (up to 2x).
+    Ahead: the lead is the asset, so ease off — but never below 0.6x, because
+    protecting a small lead into a five-day finish is how a winner becomes a
+    third-place finisher.
+    """
+    if start_equity <= 0:
+        return 1.0
+    r = equity / start_equity - 1.0
+    if r >= 0:
+        return round(max(0.6, 1.0 - min(0.4, r * 2.0)), 4)
+    return round(min(2.0, 1.0 + (-r) * 3.0), 4)
+
+
+def dynamic_risk_frac(
+    *,
+    equity: float,
+    start_equity: float,
+    sessions_remaining: int,
+    spy_above_200: bool,
+    risk_on: bool,
+    ivp: float,
+) -> dict:
+    """Fraction of equity to risk on this ticket, with its own derivation.
+
+    Returns the inputs alongside the answer so a size can always be explained
+    after the fact — an unexplainable size is one nobody can learn from.
+    """
+    cap = survival_cap(sessions_remaining)
+    conv = conviction(spy_above_200=spy_above_200, risk_on=risk_on, ivp=ivp)
+    tilt = tournament_tilt(equity=equity, start_equity=start_equity)
+    raw = cap * conv * tilt
+    frac = min(cap, max(0.0, raw))
+    return {
+        "risk_frac": round(frac, 4),
+        "survival_cap": round(cap, 4),
+        "conviction": conv,
+        "tilt": tilt,
+        "dollars": round(equity * frac, 2),
+        "why": (
+            f"cap {cap:.1%} (k={sessions_remaining}) x conviction {conv:.2f} "
+            f"x tilt {tilt:.2f} -> {frac:.1%}"
+        ),
+    }
