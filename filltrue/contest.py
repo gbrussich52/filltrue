@@ -46,10 +46,36 @@ DEBIT_STOP_FRAC = 0.50
 # Flatten into the submission deadline; don't gift a Friday gap.
 FLATTEN_DTE = 3
 
-RISK_FRAC_PER_TICKET = 0.02
-MAX_TICKETS = 4
-MAX_GROSS_RISK_FRAC = 0.08
-MAX_CONTRACTS = 20
+def _envf(name: str, default: float) -> float:
+    """Read a risk dial from the environment, falling back to the lab default.
+
+    These were hardcoded. They are the research lab's numbers, sized for a
+    90-day pre-registered gate where surviving to the end is the point. A
+    5-session tournament has the opposite shape: second place pays a third of
+    first, so the objective is P(finish first), not expected return, and a
+    conservative book cannot win one.
+
+    Made dials rather than raised outright, so the lab keeps its calibration
+    and the contest sets its own via FILLTRUE_* — one binary, two postures.
+    """
+    import os
+
+    raw = (os.environ.get(name) or "").strip()
+    if not raw:
+        return default
+    try:
+        v = float(raw)
+    except ValueError:
+        return default
+    return v if v > 0 else default
+
+
+# Loss caps stay. Profit is uncapped by construction: long premium has no
+# upper bound, and the exit rules close on thesis death, not on a target.
+RISK_FRAC_PER_TICKET = _envf("FILLTRUE_RISK_FRAC", 0.02)
+MAX_TICKETS = int(_envf("FILLTRUE_MAX_TICKETS", 4))
+MAX_GROSS_RISK_FRAC = _envf("FILLTRUE_MAX_GROSS", 0.08)
+MAX_CONTRACTS = int(_envf("FILLTRUE_MAX_CONTRACTS", 20))
 
 IVP_HIGH = 50.0
 IVP_LOW = 30.0
