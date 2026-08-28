@@ -202,3 +202,75 @@ class TestRiskDials:
         c = self._reload(FILLTRUE_RISK_FRAC=0.50)
         assert c.contracts_for_risk(equity=100_000, max_loss_per_contract=1e9) == 0
         assert c.contracts_for_risk(equity=0, max_loss_per_contract=500) == 0
+
+
+class TestDynamicSizing:
+    """Size is computed per entry, not configured once."""
+
+    def test_cap_escalates_as_sessions_run_out(self):
+        from filltrue.contest import survival_cap
+        caps = [survival_cap(k) for k in (5, 4, 3, 2, 1)]
+        assert caps == sorted(caps), f"cap must rise as k falls: {caps}"
+        assert 0.20 < caps[0] < 0.30 and 0.70 < caps[-1] < 0.80
+
+    def test_cap_survives_its_own_worst_case(self):
+        """k total losses at the cap must leave the retained floor."""
+        from filltrue.contest import RETAIN_AFTER_WORST_CASE, survival_cap
+        for k in range(1, 8):
+            f = survival_cap(k)
+            assert (1 - f) ** k == __import__("pytest").approx(
+                RETAIN_AFTER_WORST_CASE, rel=1e-9)
+
+    def test_cap_never_reaches_full_deployment(self):
+        from filltrue.contest import survival_cap
+        assert all(survival_cap(k) < 1.0 for k in (1, 2, 5, 50))
+
+    def test_neutral_signal_sizes_small_without_a_rule(self):
+        from filltrue.contest import dynamic_risk_frac
+        d = dynamic_risk_frac(equity=100_000, start_equity=100_000,
+                              sessions_remaining=5, spy_above_200=False,
+                              risk_on=False, ivp=50)
+        assert d["risk_frac"] < 0.05
+
+    def test_extreme_iv_either_direction_is_strong(self):
+        from filltrue.contest import conviction
+        lo = conviction(spy_above_200=True, risk_on=True, ivp=5)
+        hi = conviction(spy_above_200=True, risk_on=True, ivp=95)
+        assert lo == __import__("pytest").approx(hi, abs=0.02)
+
+    def test_behind_pushes_and_ahead_eases(self):
+        from filltrue.contest import tournament_tilt
+        behind = tournament_tilt(equity=70_000, start_equity=100_000)
+        flat = tournament_tilt(equity=100_000, start_equity=100_000)
+        ahead = tournament_tilt(equity=150_000, start_equity=100_000)
+        assert behind > flat > ahead
+        assert ahead >= 0.6, "must not shrink to nothing while defending a lead"
+
+    def test_tilt_is_bounded(self):
+        from filltrue.contest import tournament_tilt
+        assert tournament_tilt(equity=1, start_equity=100_000) <= 2.0
+        assert tournament_tilt(equity=10_000_000, start_equity=100_000) >= 0.6
+
+    def test_result_never_exceeds_its_own_cap(self):
+        from filltrue.contest import dynamic_risk_frac, survival_cap
+        for k in (1, 2, 3, 5):
+            for eq in (10_000, 100_000, 250_000):
+                d = dynamic_risk_frac(equity=eq, start_equity=100_000,
+                                      sessions_remaining=k, spy_above_200=True,
+                                      risk_on=True, ivp=2)
+                assert d["risk_frac"] <= survival_cap(k) + 1e-9
+
+    def test_degenerate_inputs_do_not_crash(self):
+        from filltrue.contest import dynamic_risk_frac, tournament_tilt
+        assert tournament_tilt(equity=100, start_equity=0) == 1.0
+        d = dynamic_risk_frac(equity=0, start_equity=100_000, sessions_remaining=0,
+                              spy_above_200=True, risk_on=True, ivp=12)
+        assert d["risk_frac"] >= 0 and d["dollars"] == 0
+
+    def test_every_size_explains_itself(self):
+        from filltrue.contest import dynamic_risk_frac
+        d = dynamic_risk_frac(equity=100_000, start_equity=100_000,
+                              sessions_remaining=5, spy_above_200=True,
+                              risk_on=True, ivp=12)
+        assert {"survival_cap", "conviction", "tilt", "why"} <= set(d)
+        assert "cap" in d["why"] and "conviction" in d["why"]
