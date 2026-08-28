@@ -23,6 +23,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
 from filltrue.contest import dynamic_risk_frac, survival_cap  # noqa: E402
+from ops.ivp import ivp as real_ivp  # noqa: E402
 
 TRADE = "https://paper-api.alpaca.markets/v2"
 DATA = "https://data.alpaca.markets/v1beta1"
@@ -32,7 +33,15 @@ CONTEST_END = dt.date(2026, 9, 4)
 # Thesis-death triggers. Each answers "is the reason we entered still true?"
 TAKE_PROFIT_MULT = 1.80      # debit up 80% — bank it, the snapshot is what scores
 STOP_FRAC = 0.50             # premium halved — the move did not come
-IV_POP_EXIT = 1.60           # IV up 60% — we bought cheap vol; that trade is done
+# Exit on IVP LEVEL, not on a ratio to entry IV. Backtest over 868 IVP<10
+# entries (IWM, 180-DTE calls, 2004-2026): exiting at IVP>=50 returned +7.6%
+# mean / -3.0% median and exiting at IVP>=75 returned +10.1% / -4.8% — both
+# WORSE than no exit rule at all (+14.5% on a dumb 90-day hold). Only IVP>=90
+# paid: +25.9% mean, +19.7% median, 59% win. Vol spikes are right-skewed, so
+# selling into a partial recovery harvests the small half of the distribution
+# and forfeits the large half. The old 1.6x-entry-IV trigger fired around
+# IVP 40-55 — precisely the worst threshold.
+IVP_EXIT = 90.0
 TREND_BREAK = "spy_below_200"
 
 
@@ -74,7 +83,8 @@ def regime(h: dict) -> dict:
     return out
 
 
-def evaluate(pos: dict, snap: dict, reg: dict, k: int, equity: float) -> dict:
+def evaluate(pos: dict, snap: dict, reg: dict, k: int, equity: float,
+             ivp_now: float | None = None) -> dict:
     """Decide on one position. Every branch names the trigger it fired on."""
     entry = float(pos["avg_entry_price"])
     mark = float(pos["current_price"])
@@ -90,8 +100,8 @@ def evaluate(pos: dict, snap: dict, reg: dict, k: int, equity: float) -> dict:
         act, why = "EXIT", f"premium halved ({ratio:.2f}x) — the move did not come"
     elif not reg["SPY"]["above_200"]:
         act, why = "EXIT", "SPY lost its 200d — the risk-on reason for a call debit is gone"
-    elif iv_entry and iv_now >= iv_entry * IV_POP_EXIT:
-        act, why = "TRIM", f"IV {iv_entry:.1f}% -> {iv_now:.1f}% — cheap-vol thesis has paid"
+    elif ivp_now is not None and ivp_now >= IVP_EXIT:
+        act, why = "EXIT", f"IVP {ivp_now:.0f} >= {IVP_EXIT:.0f} — vol is extreme, sell it"
     elif k == 1:
         act, why = "EXIT", "final session — the score is a snapshot, do not hold through it"
     else:
@@ -123,11 +133,24 @@ def main() -> int:
                              params={"symbols": syms, "feed": "indicative"}
                              ).json().get("snapshots", {})
 
-    calls = [evaluate(p, snaps.get(p["symbol"], {}), reg, k, equity) for p in pos]
+    pre_iv = real_ivp("IWM") or {}
+    _ivp = pre_iv.get("ivp_1y")
+    calls = [evaluate(p, snaps.get(p["symbol"], {}), reg, k, equity, _ivp) for p in pos]
+
+    # Real implied-vol percentile beats the realized proxy: it is what an
+    # option buyer is actually charged. Falls back to realized if FRED is down.
+    iv_iwm = pre_iv
+    ivp_used = iv_iwm.get("ivp_1y")
+    ivp_src = f"RVX {iv_iwm.get('level')} ({iv_iwm.get('as_of')})"
+    if ivp_used is None:
+        ivp_used, ivp_src = reg["IWM"]["hv_pct_1y"], "realized-vol proxy (RVX unavailable)"
+
     size = dynamic_risk_frac(
         equity=equity, start_equity=START_EQUITY, sessions_remaining=k,
         spy_above_200=reg["SPY"]["above_200"], risk_on=reg["SPY"]["above_200"],
-        ivp=reg["IWM"]["hv_pct_1y"])
+        ivp=ivp_used)
+    size["ivp_used"] = ivp_used
+    size["ivp_source"] = ivp_src
     deployed = sum(abs(float(p["market_value"])) for p in pos)
     report = {
         "ts": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"),
@@ -135,7 +158,7 @@ def main() -> int:
         "pnl_total": round(equity - START_EQUITY, 2),
         "deployed_pct": round(deployed / equity * 100, 1) if equity else 0,
         "headroom_pct": round(survival_cap(k) * 100, 1),
-        "regime": reg, "positions": calls, "next_size": size,
+        "regime": reg, "iv": iv_iwm, "positions": calls, "next_size": size,
         "actions": [c for c in calls if c["action"] != "HOLD"],
     }
     if args.json:
@@ -148,7 +171,11 @@ def main() -> int:
     s, i = reg["SPY"], reg["IWM"]
     print(f"  SPY {s['spot']} vs 200d {s['sma200']} above={s['above_200']} | "
           f"IWM {i['spot']} HV20 {i['hv20']}% (1y pct {i['hv_pct_1y']})")
-    print(f"  deployed {report['deployed_pct']}%  next-entry cap {report['headroom_pct']}%")
+    print(f"  IVP {ivp_used} (1y) via {ivp_src}"
+          + (f"  |  3y {iv_iwm.get('ivp_3y')}  10y {iv_iwm.get('ivp_10y')}"
+             if iv_iwm.get("ivp_3y") is not None else ""))
+    print(f"  deployed {report['deployed_pct']}%  next-entry cap {report['headroom_pct']}%"
+          f"  next-size {size['risk_frac']:.1%} (${size['dollars']:,.0f})")
     if not calls:
         print("  no open positions")
     for c in calls:
