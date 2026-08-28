@@ -152,3 +152,53 @@ def test_plan_never_returns_naked_by_default():
             p: ContestPlan = plan(Regime(spy_above_200=brake, risk_on=brake, ivp=ivp))
             if p.structure != "cash":
                 assert p.defined_risk is True
+
+
+class TestRiskDials:
+    """Caps were hardcoded lab numbers; a 5-session tournament needs its own."""
+
+    @staticmethod
+    def _reload(**env):
+        import importlib, os
+        for k in ("FILLTRUE_RISK_FRAC", "FILLTRUE_MAX_GROSS",
+                  "FILLTRUE_MAX_TICKETS", "FILLTRUE_MAX_CONTRACTS"):
+            os.environ.pop(k, None)
+        os.environ.update({k: str(v) for k, v in env.items()})
+        import filltrue.contest as c
+        return importlib.reload(c)
+
+    def teardown_method(self):
+        self._reload()
+
+    def test_lab_defaults_when_unset(self):
+        c = self._reload()
+        assert (c.RISK_FRAC_PER_TICKET, c.MAX_GROSS_RISK_FRAC) == (0.02, 0.08)
+        assert (c.MAX_TICKETS, c.MAX_CONTRACTS) == (4, 20)
+
+    def test_contest_posture_applies(self):
+        c = self._reload(FILLTRUE_RISK_FRAC=0.35, FILLTRUE_MAX_GROSS=0.90,
+                         FILLTRUE_MAX_TICKETS=3, FILLTRUE_MAX_CONTRACTS=500)
+        assert c.RISK_FRAC_PER_TICKET == 0.35
+        assert c.MAX_GROSS_RISK_FRAC == 0.90
+        assert (c.MAX_TICKETS, c.MAX_CONTRACTS) == (3, 500)
+
+    def test_sizing_scales_with_the_dial(self):
+        lab = self._reload()
+        n_lab = lab.contracts_for_risk(equity=100_000, max_loss_per_contract=500)
+        hot = self._reload(FILLTRUE_RISK_FRAC=0.35, FILLTRUE_MAX_CONTRACTS=500)
+        n_hot = hot.contracts_for_risk(equity=100_000, max_loss_per_contract=500)
+        assert n_lab == 4 and n_hot == 70, f"{n_lab=} {n_hot=}"
+
+    def test_max_contracts_still_binds(self):
+        c = self._reload(FILLTRUE_RISK_FRAC=0.90, FILLTRUE_MAX_CONTRACTS=10)
+        assert c.contracts_for_risk(equity=100_000, max_loss_per_contract=100) == 10
+
+    def test_garbage_and_negative_fall_back_to_default(self):
+        for bad in ("abc", "-0.5", "0", ""):
+            c = self._reload(FILLTRUE_RISK_FRAC=bad)
+            assert c.RISK_FRAC_PER_TICKET == 0.02, f"{bad!r} was accepted"
+
+    def test_sizing_never_negative(self):
+        c = self._reload(FILLTRUE_RISK_FRAC=0.50)
+        assert c.contracts_for_risk(equity=100_000, max_loss_per_contract=1e9) == 0
+        assert c.contracts_for_risk(equity=0, max_loss_per_contract=500) == 0
