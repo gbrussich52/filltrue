@@ -21,6 +21,9 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("propose", help="pick a CSP from the demo chain")
     sub.add_parser("payload", help="print MCP place_option_order JSON for the demo CSP")
     p_plan = sub.add_parser("contest-plan", help="map lab signals → 5-day contest structure")
+    p_plan.add_argument("--equity", type=float, default=100_000.0)
+    p_plan.add_argument("--start-equity", type=float, default=100_000.0)
+    p_plan.add_argument("--sessions-left", type=int, default=5)
     p_plan.add_argument("--spy-above-200", action=argparse.BooleanOptionalAction, default=True)
     p_plan.add_argument("--risk-on", action=argparse.BooleanOptionalAction, default=True)
     p_plan.add_argument("--ivp", type=float, default=55.0)
@@ -58,31 +61,21 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.cmd == "contest-plan":
-        from filltrue.contest import Regime, plan
+        from filltrue.contest import Regime, sized_plan
 
-        p = plan(
+        out = sized_plan(
             Regime(
                 spy_above_200=args.spy_above_200,
                 risk_on=args.risk_on,
                 ivp=args.ivp,
-            )
+            ),
+            equity=args.equity,
+            start_equity=args.start_equity,
+            sessions_remaining=args.sessions_left,
         )
-        print(
-            json.dumps(
-                {
-                    "structure": p.structure,
-                    "reason": p.reason,
-                    "underlying": p.underlying,
-                    "dte_target": p.dte_target,
-                    "delta_target": p.delta_target,
-                    "defined_risk": p.defined_risk,
-                    "risk_frac": p.risk_frac,
-                    "side": p.side,
-                },
-                indent=2,
-            )
-        )
+        print(json.dumps(out, indent=2))
         return 0
+
 
     if args.cmd == "payload":
         from filltrue.agent import client_order_id, mcp_place_payload

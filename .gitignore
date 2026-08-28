@@ -13,3 +13,5 @@ dist/
 build/
 .streamlit/secrets.toml
 .DS_Store
+ops/.env
+ops/logs/

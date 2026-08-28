@@ -386,3 +386,49 @@ def dynamic_risk_frac(
             f"x tilt {tilt:.2f} -> {frac:.1%}"
         ),
     }
+
+
+def sized_plan(
+    regime: Regime,
+    *,
+    equity: float,
+    start_equity: float,
+    sessions_remaining: int,
+) -> dict:
+    """plan() picks the structure; dynamic_risk_frac() sizes it. Kept separate.
+
+    plan() also expresses its own confidence by returning a fraction of the
+    per-ticket cap (full, half for mid-IV, zero for cash). That is a signal
+    about the *setup*, independent of standing and sessions left, so it is
+    carried through as a multiplier rather than discarded — otherwise a
+    half-conviction structure would be sized like a full-conviction one.
+    """
+    p = plan(regime)
+    structure_mult = (
+        p.risk_frac / RISK_FRAC_PER_TICKET if RISK_FRAC_PER_TICKET > 0 else 0.0
+    )
+    d = dynamic_risk_frac(
+        equity=equity,
+        start_equity=start_equity,
+        sessions_remaining=sessions_remaining,
+        spy_above_200=regime.spy_above_200,
+        risk_on=regime.risk_on,
+        ivp=regime.ivp if regime.ivp is not None else 50.0,
+    )
+    frac = round(d["risk_frac"] * structure_mult, 4)
+    return {
+        "structure": p.structure,
+        "reason": p.reason,
+        "underlying": p.underlying,
+        "dte_target": p.dte_target,
+        "delta_target": p.delta_target,
+        "defined_risk": p.defined_risk,
+        "side": p.side,
+        "risk_frac": frac,
+        "risk_dollars": round(equity * frac, 2),
+        "sizing": {
+            **d,
+            "structure_mult": round(structure_mult, 3),
+            "why": f"{d['why']} x structure {structure_mult:.2f} -> {frac:.1%}",
+        },
+    }
