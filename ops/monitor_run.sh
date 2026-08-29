@@ -11,4 +11,10 @@ H=$(date +%H); M=$(date +%u)
 eval "$(grep -E '^(ALPACA_API_KEY|ALPACA_SECRET_KEY)=' ops/.env 2>/dev/null | sed 's/^/export /')"
 ../automated-trading/.venv/bin/python ops/monitor.py --json \
   >> ops/logs/monitor.jsonl 2>> ops/logs/monitor.err
-echo "$(date -u +%FT%TZ) exit=$?" >> ops/logs/monitor.log
+# Capture BEFORE any other command runs. `echo "$(date) exit=$?"` expands the
+# command substitution first, so $? reports date's status (always 0) and every
+# line logged a false green regardless of what the monitor did.
+rc=$?
+ts=$(date -u +%FT%TZ)
+echo "$ts exit=$rc" >> ops/logs/monitor.log
+exit "$rc"                                # let launchd see a real failure
