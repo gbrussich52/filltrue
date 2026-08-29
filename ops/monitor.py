@@ -15,6 +15,7 @@ import argparse
 import datetime as dt
 import json
 import os
+import re
 import sys
 
 import requests
@@ -33,6 +34,8 @@ CONTEST_END = dt.date(2026, 9, 4)
 # Thesis-death triggers. Each answers "is the reason we entered still true?"
 TAKE_PROFIT_MULT = 1.80      # debit up 80% — bank it, the snapshot is what scores
 STOP_FRAC = 0.50             # premium halved — the move did not come
+CREDIT_STOP_MULT = 1.50      # short: mark at 1.5x credit (matches contest.py)
+CREDIT_TAKE_PROFIT = 0.50    # short: bank at 50% of credit captured
 # Exit on IVP LEVEL, not on a ratio to entry IV. Backtest over 868 IVP<10
 # entries (IWM, 180-DTE calls, 2004-2026): exiting at IVP>=50 returned +7.6%
 # mean / -3.0% median and exiting at IVP>=75 returned +10.1% / -4.8% — both
@@ -95,18 +98,48 @@ def regime(h: dict) -> dict:
     return out
 
 
+def structure_key(symbol: str) -> str:
+    """underlying + expiry — legs of one spread share it."""
+    m = re.match(r"^([A-Z]{1,6})(\d{6})[CP]\d{8}$", symbol)
+    return f"{m.group(1)}:{m.group(2)}" if m else symbol
+
+
 def evaluate(pos: dict, snap: dict, reg: dict, k: int, equity: float,
-             ivp_now: float | None = None) -> dict:
+             ivp_now: float | None = None, *, multi_leg: bool = False) -> dict:
     """Decide on one position. Every branch names the trigger it fired on."""
     entry = float(pos["avg_entry_price"])
     mark = float(pos["current_price"])
     qty = float(pos["qty"])
     pnl = (mark - entry) * qty * 100
-    ratio = mark / entry if entry else 0.0
-    iv_now = (snap.get("impliedVolatility") or 0) * 100
-    iv_entry = float(pos.get("_iv_entry") or 0)
+    # mark/entry is a DEBIT metric. On a short, a rising mark is a LOSS, so the
+    # same ratio means the opposite thing and the take-profit and stop swap
+    # ends. Verified: short at 3.00 marking 3.40 scored 1.70x and returned
+    # "HOLD — thesis intact" while down $1,400.
+    is_short = qty < 0
+    ratio = (entry / mark if mark else 0.0) if is_short else (mark / entry if entry else 0.0)
+    iv_raw = snap.get("impliedVolatility")
+    iv_now = iv_raw * 100 if iv_raw else None
+    iv_txt = f"{iv_now:.1f}%" if iv_now is not None else "n/a"
 
-    if ratio >= TAKE_PROFIT_MULT:
+    if is_short:
+        # A short is managed on its own arithmetic: profit is the credit
+        # decaying toward zero, loss is the mark expanding past a multiple of
+        # the credit. Reusing the debit thresholds here is what let a short
+        # down $1,400 report "thesis intact".
+        cost_mult = mark / entry if entry else 0.0
+        if cost_mult <= 1 - CREDIT_TAKE_PROFIT:
+            act, why = "EXIT", (f"bought back at {cost_mult:.2f}x credit — "
+                                f"{CREDIT_TAKE_PROFIT:.0%} of premium captured")
+        elif cost_mult >= CREDIT_STOP_MULT:
+            act, why = "EXIT", (f"mark {cost_mult:.2f}x credit "
+                                f"(>= {CREDIT_STOP_MULT}x) — short stop")
+        elif not reg["SPY"]["above_200"]:
+            act, why = "EXIT", "SPY lost its 200d — crash brake on a short"
+        elif k == 1:
+            act, why = "EXIT", "final session — do not hold through the snapshot"
+        else:
+            act, why = "HOLD", f"short intact ({cost_mult:.2f}x credit, IV {iv_txt})"
+    elif ratio >= TAKE_PROFIT_MULT:
         act, why = "EXIT", f"debit at {ratio:.2f}x entry (>= {TAKE_PROFIT_MULT}x) — bank it"
     elif ratio <= STOP_FRAC:
         act, why = "EXIT", f"premium halved ({ratio:.2f}x) — the move did not come"
@@ -124,11 +157,21 @@ def evaluate(pos: dict, snap: dict, reg: dict, k: int, equity: float,
     elif k == 1:
         act, why = "EXIT", "final session — the score is a snapshot, do not hold through it"
     else:
-        act, why = "HOLD", f"thesis intact ({ratio:.2f}x, SPY above 200d, IV {iv_now:.1f}%)"
+        act, why = "HOLD", f"thesis intact ({ratio:.2f}x, SPY above 200d, IV {iv_txt})"
+
+    # A per-leg EXIT on a spread closes one side and leaves the other naked.
+    # A long wing decaying past 0.5x is the NORMAL case, so this fires on the
+    # first credit spread the plan opens — turning defined risk into an
+    # unhedged short. Structures are closed whole or not at all.
+    if multi_leg and act in ("EXIT", "TRIM"):
+        act, why = "REVIEW", (f"{act} suppressed — {pos['symbol']} is one leg of a "
+                              f"multi-leg structure; close the structure whole, "
+                              f"not this leg ({why})")
 
     return {
         "symbol": pos["symbol"], "qty": qty, "entry": entry, "mark": mark,
-        "ratio": round(ratio, 3), "pnl": round(pnl, 2), "iv_now": round(iv_now, 1),
+        "ratio": round(ratio, 3), "pnl": round(pnl, 2),
+        "iv_now": round(iv_now, 1) if iv_now is not None else None,
         "action": act, "why": why,
     }
 
@@ -160,7 +203,11 @@ def main() -> int:
         # than an exit rule that quietly stops existing.
         _ivp = reg["IWM"]["hv_pct_1y"]
         pre_iv = dict(pre_iv, degraded=True, proxy="realized-vol percentile")
-    calls = [evaluate(p, snaps.get(p["symbol"], {}), reg, k, equity, _ivp) for p in pos]
+    groups: dict[str, int] = {}
+    for p in pos:
+        groups[structure_key(p["symbol"])] = groups.get(structure_key(p["symbol"]), 0) + 1
+    calls = [evaluate(p, snaps.get(p["symbol"], {}), reg, k, equity, _ivp,
+                      multi_leg=groups[structure_key(p["symbol"])] > 1) for p in pos]
 
     # Real implied-vol percentile beats the realized proxy: it is what an
     # option buyer is actually charged. Falls back to realized if FRED is down.
