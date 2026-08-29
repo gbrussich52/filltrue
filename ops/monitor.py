@@ -70,7 +70,19 @@ def regime(h: dict) -> dict:
     out = {}
     for t in ("SPY", "IWM"):
         px = yf.Ticker(t).history(period="3y")["Close"].astype(float)
+        # yfinance appends a row for the current calendar day with a NaN close
+        # outside RTH. float(NaN) > float(NaN) is False, which silently flipped
+        # above_200 to False and made the monitor emit EXIT on the whole book
+        # with the reason "SPY lost its 200d". A missing price must never be
+        # read as a regime change.
+        px = px.dropna()
+        if len(px) < 200:
+            raise RuntimeError(
+                f"{t}: only {len(px)} usable closes after dropna — refusing to "
+                "produce a verdict on incomplete data")
         spot, sma = float(px.iloc[-1]), float(px.rolling(200).mean().iloc[-1])
+        if not (np.isfinite(spot) and np.isfinite(sma)):
+            raise RuntimeError(f"{t}: non-finite spot/sma ({spot}/{sma})")
         r = np.log(px).diff()
         hv = (r.rolling(20).std() * np.sqrt(252)).dropna()
         out[t] = {
@@ -102,6 +114,13 @@ def evaluate(pos: dict, snap: dict, reg: dict, k: int, equity: float,
         act, why = "EXIT", "SPY lost its 200d — the risk-on reason for a call debit is gone"
     elif ivp_now is not None and ivp_now >= IVP_EXIT:
         act, why = "EXIT", f"IVP {ivp_now:.0f} >= {IVP_EXIT:.0f} — vol is extreme, sell it"
+    elif ivp_now is None:
+        # The IVP exit is the primary profit-taking rule. If its input is
+        # missing, the position is UNMONITORED for that rule — say so instead
+        # of reporting "thesis intact", which reads as an all-clear the loop
+        # is not entitled to give.
+        act, why = "DEGRADED", ("IVP unavailable — the IVP>=90 exit is NOT being "
+                                "evaluated; check ops/logs/monitor.err")
     elif k == 1:
         act, why = "EXIT", "final session — the score is a snapshot, do not hold through it"
     else:
@@ -135,6 +154,12 @@ def main() -> int:
 
     pre_iv = real_ivp("IWM") or {}
     _ivp = pre_iv.get("ivp_1y")
+    if _ivp is None:
+        # Realized-vol percentile is not implied vol, but it moves with it and
+        # is computed from price data we already hold. Better a labelled proxy
+        # than an exit rule that quietly stops existing.
+        _ivp = reg["IWM"]["hv_pct_1y"]
+        pre_iv = dict(pre_iv, degraded=True, proxy="realized-vol percentile")
     calls = [evaluate(p, snaps.get(p["symbol"], {}), reg, k, equity, _ivp) for p in pos]
 
     # Real implied-vol percentile beats the realized proxy: it is what an
@@ -181,6 +206,9 @@ def main() -> int:
     for c in calls:
         print(f"  {c['action']:<5} {c['symbol']}  {c['qty']:.0f} @ {c['entry']:.2f} "
               f"-> {c['mark']:.2f} ({c['ratio']:.2f}x) P&L {c['pnl']:+,.0f} | {c['why']}")
+    if iv_iwm.get("degraded"):
+        print(f"  !! DEGRADED — RVX unavailable ({iv_iwm.get('error','no data')[:60]}); "
+              f"IVP exit running on {iv_iwm.get('proxy')}")
     if not report["actions"]:
         print("  VERDICT: no action — checked, not assumed")
     return 0
