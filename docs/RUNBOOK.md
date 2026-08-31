@@ -3,18 +3,25 @@
 **Window:** Fri 2026-08-28 15:00 UTC → Fri 2026-09-04 15:00 UTC (5 cash sessions).
 **Account:** a dedicated $100,000 paper account. Not the research account.
 
-## Why there is no cron job
+## How the loop actually runs
 
-FillTrue is a decision kernel, not an execution engine. `broker.py` contains a
-`Protocol` and a `FakeBroker` — there is no Alpaca client in this repo, by
-design. Orders are placed through the **Alpaca MCP server**, which lives in a
-Claude session. So the loop is driven, not scheduled: there is nothing to
-install and nothing that runs while you sleep.
+FillTrue is the brain: it decides, and it will not call anything OPEN until
+the broker filled. Hands:
+
+1. **Alpaca MCP** (`place_option_order` + `get_order_by_id`) in a session.
+2. **`filltrue/alpaca.py` (`AlpacaBroker`)** — the gated path. Route new tickets
+   through the agent so `gate_order()` actually sees them. The two 2026-08-28
+   live fills went out through ad-hoc REST and bypassed the gate; do not
+   repeat that.
+
+A launchd job `com.giani.filltrue-monitor` (`ops/com.giani.filltrue-monitor.plist`)
+re-evaluates every 15 minutes during RTH (09:00–15:45 ET). It names
+HOLD / TRIM / ADD / EXIT. **It does not place orders.**
 
 ```
-FillTrue    the brain — decides, and refuses to call anything OPEN until truly filled
-Alpaca MCP  the hands — places the order
-the session the arms  — runs the loop below
+FillTrue     the brain — decides, OPEN only on a true fill
+AlpacaBroker / MCP  the hands — place the order
+monitor      the eyes — a verdict every 15 min, human still clicks
 ```
 
 ## One-time setup
@@ -41,7 +48,7 @@ the session the arms  — runs the loop below
 4. **Verify before the first order:**
 
    ```bash
-   .venv/bin/python -m pytest -q          # expect 80 passed
+   .venv/bin/python -m pytest -q          # network-free. If this is red, do not trade.
    ```
 
 ## Each session

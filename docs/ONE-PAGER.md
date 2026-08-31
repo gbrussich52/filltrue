@@ -20,15 +20,16 @@ FillTrue is a paper-only options agent. Alpaca MCP is the hands (`place_option_o
 - Dedicated $100k contest paper account. Lab ETFs (SPY/VEA/BND/BIL stock) abort the agent.
 - No 0DTE. No 45 DTE lab tenor on this account.
 - Defined-risk default (spreads). Crash brake on → no new short premium.
-- 2% of equity at risk per ticket, 4 tickets, 8% gross cap.
+- Size is `survival_cap(sessions_left) × conviction × tournament_tilt`, not a fixed 2%/8%. Max 4 tickets.
 - Contest take-profit (50% of credit / ~80% debit). Stop 1.5× credit. Flatten into the deadline.
-- Closes are `buy_to_close`, never `buy_to_open`.
+- Close a short with `buy_to_close`. Close a long with `sell_to_close`. Never flatten a short with `buy_to_open`.
+- Live sleeve this week: cheap-IV long IWM premium (call debit from `plan()`). OPEN still only on a true fill. One 81-DTE long put sits outside the 7–21 band as a cheap-vega hold, not a new-entry template.
 
 ## Alpaca infrastructure
 
 - Trading API via official `alpacahq/alpaca-mcp-server` (MCP) and/or this CLI.
 - Paper endpoint only (`ALPACA_PAPER_TRADE=true`).
-- `client_order_id` prefix `filltrue-` for an isolated ledger.
+- Agent-generated `client_order_id` prefix `filltrue-`. Ledger still OPEN-on-fill if an ad-hoc id omitted it.
 - Public repo + demo: https://github.com/gbrussich52/filltrue · https://gbrussich52.github.io/filltrue/
 
 Not investment advice. Paper trading. Options can lose more than the credit.

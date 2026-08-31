@@ -13,6 +13,9 @@ from filltrue.types import Candidate, Contract, Event
 AS_OF = date(2026, 8, 25)
 EXP = date(2026, 10, 16)
 SYMBOL = "IWM261016P00220000"
+# Contest band fixture (7–21 DTE, 25–35Δ). Lab replay still uses SYMBOL.
+CONTEST_EXP = date(2026, 9, 11)
+CONTEST_SYMBOL = "IWM260911P00230000"
 
 
 def demo_chain() -> list[Contract]:
@@ -56,6 +59,16 @@ def demo_chain() -> list[Contract]:
             delta=-0.18,
             bid=0.90,
             ask=0.96,
+        ),
+        Contract(
+            symbol=CONTEST_SYMBOL,
+            underlying="IWM",
+            expiration=CONTEST_EXP,
+            strike=230,
+            option_type="put",
+            delta=-0.30,
+            bid=1.55,
+            ask=1.62,
         ),
     ]
 

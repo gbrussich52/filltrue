@@ -66,6 +66,7 @@ def test_refuses_0dte_and_lab_tenor():
     assert contest_entry_ok(dte=7, abs_delta=0.30).ok
     assert contest_entry_ok(dte=21, abs_delta=0.30).ok
     assert not contest_entry_ok(dte=45, abs_delta=0.18).ok  # lab tenor
+    assert not contest_entry_ok(dte=81, abs_delta=0.30).ok  # live Nov put is hold, not a template
 
 
 def test_refuses_lab_16_delta():

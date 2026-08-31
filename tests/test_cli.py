@@ -15,7 +15,8 @@ def test_replay_cli(capsys):
 def test_propose_cli(capsys):
     assert main(["propose"]) == 0
     out = capsys.readouterr().out
-    assert "IWM261016P00220000" in out
+    assert "IWM260911P00230000" in out
+    assert "IWM261016P00220000" not in out
 
 
 def test_payload_cli(capsys):
@@ -29,6 +30,9 @@ def test_contest_plan_cli(capsys):
     assert main(["contest-plan", "--spy-above-200", "--ivp", "70"]) == 0
     out = capsys.readouterr().out
     assert "bull_put_credit" in out
+    assert main(["contest-plan", "--spy-above-200", "--ivp", "20"]) == 0
+    out = capsys.readouterr().out
+    assert "call_debit" in out
     assert main(["contest-plan", "--no-spy-above-200", "--ivp", "70"]) == 0
     out = capsys.readouterr().out
     assert "cash" in out

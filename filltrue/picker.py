@@ -11,7 +11,6 @@ from filltrue.policy import (
     DTE_MIN,
     DTE_TARGET,
     TARGET_DELTA,
-    gate_entry,
 )
 from filltrue.types import Candidate, Contract
 
@@ -53,8 +52,7 @@ def pick_csp(
             dte=dte,
             limit_price=round(c.bid, 2),
         )
-        if not gate_entry(cand).ok:
-            continue
+        # No policy.gate_entry here: that gate is lab 45 DTE and made contest kwargs a no-op.
         scored.append(
             (abs(abs_delta - target_delta), abs(dte - target_dte), cand)
         )

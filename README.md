@@ -2,7 +2,7 @@
 
 **An options agent that only believes fills.**
 
-Paper-only cash-secured puts on [Alpaca](https://alpaca.markets). Hands = [Alpaca MCP](https://github.com/alpacahq/alpaca-mcp-server). Brain = this repo.
+Paper-only options on [Alpaca](https://alpaca.markets). Hands = [Alpaca MCP](https://github.com/alpacahq/alpaca-mcp-server). Brain = this repo. The structure follows IV: sell defined-risk premium when it is rich, **buy** it when it is cheap. OPEN still only on a true fill.
 
 > Most MCP trading bots will wrap “LLM says sell a put” around `place_option_order` and log **OPEN** when the call returns an id. Alpaca will happily hand you `status=new` and `filled_qty=0`. A DAY limit that expires unfilled then sits on the ledger as a short that never existed.
 
@@ -55,17 +55,22 @@ Full write-up: [`docs/CONTEST-RULES.md`](docs/CONTEST-RULES.md) · required one-
 
 ## What it trades
 
+This repo is the **contest** agent (`FILLTRUE_CONTEST=true` by default). `python -m filltrue contest-plan` is the map.
+
 - Underlying: IWM
-- Structure: naked cash-secured put
-- Band: |delta| 0.16–0.20, DTE 30–60 (target 45 / 18Δ)
-- Entry: limit at bid, TIF DAY, `position_intent=sell_to_open`
-- Exits (harvest at the right time):
-  - stop when mark ≥ 1.5× credit
-  - trail giveback (arm 30%, giveback 15 points of credit)
-  - 21 DTE gamma stop
-- Close: `buy_to_close` only — never `buy_to_open` (that leftover long put is a real bug)
+- Band: |delta| 0.25–0.35, DTE 7–21 (target 14 / 30Δ). No 0DTE. No 45 DTE lab tenor.
+- Structure follows IVP, not a religious CSP:
+  - risk-on + IV rich (≥50) → bull put credit (`sell_to_open`)
+  - risk-on + IV cheap (<30) → call debit (`buy_to_open`)
+  - crash brake on → cash, or a small put debit if IV is cheap
+- This week's live sleeve: **cheap-IV long premium** (IVP was ~2). OPEN still required a true fill.
+- Entry: limit, TIF DAY, `client_order_id` starts with `filltrue-`
+- Exits: 50% of credit / ~80% on a debit, stop 1.5× credit, flatten into Friday
+- Close a short with `buy_to_close`. Close a long with `sell_to_close`. Never `buy_to_open` to flatten a short — that leftover long put is a real bug.
 
 New entries and market exits only while the session is open. Parking a DAY limit overnight is how ghosts are born.
+
+The 90-day lab (16–20Δ / 45 DTE naked CSP, harvest when the reason to hold is gone) is a **different paper account**. Do not mix the books.
 
 ## Why this, not another LLM picker
 

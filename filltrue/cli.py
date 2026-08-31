@@ -9,6 +9,31 @@ import sys
 from filltrue import __version__
 
 
+def _pick_contest(chain, *, as_of, underlying: str = "IWM"):
+    """Same bands Agent.propose uses in contest mode — not the lab 45 DTE CSP."""
+    from filltrue.contest import (
+        DELTA_HI as CONTEST_DELTA_HI,
+        DELTA_LO as CONTEST_DELTA_LO,
+        DTE_MAX as CONTEST_DTE_MAX,
+        DTE_MIN as CONTEST_DTE_MIN,
+        DTE_TARGET as CONTEST_DTE_TARGET,
+        TARGET_DELTA as CONTEST_TARGET_DELTA,
+    )
+    from filltrue.picker import pick_csp
+
+    return pick_csp(
+        chain,
+        as_of=as_of,
+        underlying=underlying,
+        delta_lo=CONTEST_DELTA_LO,
+        delta_hi=CONTEST_DELTA_HI,
+        dte_lo=CONTEST_DTE_MIN,
+        dte_hi=CONTEST_DTE_MAX,
+        target_delta=CONTEST_TARGET_DELTA,
+        target_dte=CONTEST_DTE_TARGET,
+    )
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="filltrue",
@@ -39,10 +64,9 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.cmd == "propose":
-        from filltrue.picker import pick_csp
         from filltrue.replay import AS_OF, demo_chain
 
-        cand = pick_csp(demo_chain(), as_of=AS_OF, underlying="IWM")
+        cand = _pick_contest(demo_chain(), as_of=AS_OF)
         if cand is None:
             print("no candidate", file=sys.stderr)
             return 1
@@ -80,10 +104,9 @@ def main(argv: list[str] | None = None) -> int:
     if args.cmd == "payload":
         from filltrue.agent import client_order_id, mcp_place_payload
         from filltrue.gate import open_intent
-        from filltrue.picker import pick_csp
         from filltrue.replay import AS_OF, demo_chain
 
-        cand = pick_csp(demo_chain(), as_of=AS_OF, underlying="IWM")
+        cand = _pick_contest(demo_chain(), as_of=AS_OF)
         assert cand is not None
         intent = open_intent(
             cand.symbol,
