@@ -15,8 +15,11 @@ the broker filled. Hands:
    repeat that.
 
 A launchd job `com.giani.filltrue-monitor` (`ops/com.giani.filltrue-monitor.plist`)
-re-evaluates every 15 minutes during RTH (09:00–15:45 ET). It names
-HOLD / TRIM / ADD / EXIT. **It does not place orders.**
+re-evaluates every 15 minutes **weekdays 09:30–15:45 ET only** through
+2026-09-04. No weekend wakes, no overnight. After that date the runner
+`launchctl bootout`s itself. It names HOLD / TRIM / ADD / EXIT. The only
+order it may submit is the Giani-authorized Thursday 1pm time-stop on the
+Sep 10 296c.
 
 ```
 FillTrue     the brain — decides, OPEN only on a true fill

@@ -4,10 +4,16 @@ set -uo pipefail
 cd "$(dirname "$0")/.." || exit 1
 mkdir -p ops/logs
 END=2026-09-04
-[ "$(date +%F)" \> "$END" ] && exit 0            # self-retires after the contest
+# After the contest: do not keep waking. Unload the job so Sat/Sun/overnight
+# are not 26 empty bash processes. Giani 2026-09-01.
+if [ "$(date +%F)" \> "$END" ]; then
+  echo "$(date -u +%FT%TZ) contest over — unloading com.giani.filltrue-monitor" >> ops/logs/monitor.log
+  launchctl bootout "gui/$(id -u)/com.giani.filltrue-monitor" 2>> ops/logs/launchd.err || true
+  exit 0
+fi
 H=$(date +%H); M=$(date +%u)
-[ "$M" -gt 5 ] && exit 0                          # weekdays only
-[ "$H" -lt 9 ] || [ "$H" -ge 16 ] && exit 0       # RTH-ish, ET
+[ "$M" -gt 5 ] && exit 0                          # weekdays only (plist also gates this)
+[ "$H" -lt 9 ] || [ "$H" -ge 16 ] && exit 0       # RTH-ish, ET — not overnight
 # `eval` on a credentials file is arbitrary code execution in the key path.
 set -a; [ -f ops/.env ] && . ops/.env; set +a
 ../automated-trading/.venv/bin/python ops/monitor.py --json \
