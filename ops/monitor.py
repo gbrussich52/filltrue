@@ -23,7 +23,11 @@ import requests
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
-from filltrue.contest import dynamic_risk_frac, survival_cap  # noqa: E402
+from filltrue.contest import (  # noqa: E402
+    dynamic_risk_frac,
+    survival_cap,
+    thursday_call_time_stop,
+)
 from ops.ivp import ivp as real_ivp  # noqa: E402
 
 TRADE = "https://paper-api.alpaca.markets/v2"
@@ -147,6 +151,10 @@ def evaluate(pos: dict, snap: dict, reg: dict, k: int, equity: float,
         act, why = "EXIT", "SPY lost its 200d — the risk-on reason for a call debit is gone"
     elif ivp_now is not None and ivp_now >= IVP_EXIT:
         act, why = "EXIT", f"IVP {ivp_now:.0f} >= {IVP_EXIT:.0f} — vol is extreme, sell it"
+    elif (ts := thursday_call_time_stop(
+        symbol=pos["symbol"], entry=entry, mark=mark,
+    )):
+        act, why = "EXIT", ts
     elif ivp_now is None:
         # The IVP exit is the primary profit-taking rule. If its input is
         # missing, the position is UNMONITORED for that rule — say so instead
@@ -173,6 +181,56 @@ def evaluate(pos: dict, snap: dict, reg: dict, k: int, equity: float,
         "ratio": round(ratio, 3), "pnl": round(pnl, 2),
         "iv_now": round(iv_now, 1) if iv_now is not None else None,
         "action": act, "why": why,
+    }
+
+
+def _execute_time_stop(calls: list, h: dict) -> dict | None:
+    """Giani authorized this one cut. Monitor stays read-only for every other EXIT.
+
+    Idempotent: same client_order_id every fire after Thursday 1pm, so a second
+    15-min tick cannot open a second sell.
+    """
+    hit = next(
+        (c for c in calls
+         if c["action"] == "EXIT" and "Thursday 1pm time-stop" in c["why"]),
+        None,
+    )
+    if hit is None:
+        return None
+    try:
+        clock = requests.get(f"{TRADE}/clock", headers=h, timeout=15).json()
+    except requests.RequestException as e:
+        return {"ok": False, "detail": f"clock failed: {e}"}
+    if not clock.get("is_open"):
+        return {"ok": False, "detail": "session closed — time-stop waits for RTH"}
+    qty = int(abs(hit["qty"]))
+    if qty <= 0:
+        return {"ok": False, "detail": "qty 0"}
+    body = {
+        "symbol": hit["symbol"],
+        "qty": str(qty),
+        "side": "sell",
+        "type": "market",
+        "time_in_force": "day",
+        "position_intent": "sell_to_close",
+        "client_order_id": "filltrue-timestop-C00296000-20260903",
+    }
+    try:
+        r = requests.post(f"{TRADE}/orders", headers=h, json=body, timeout=20)
+    except requests.RequestException as e:
+        return {"ok": False, "detail": f"submit failed: {e}"}
+    if r.status_code == 422 and "client_order_id" in (r.text or "").lower():
+        return {"ok": True, "detail": "already submitted (duplicate client_order_id)"}
+    if r.status_code >= 400:
+        return {"ok": False, "detail": f"http {r.status_code}: {r.text[:200]}"}
+    order = r.json()
+    return {
+        "ok": True,
+        "order_id": order.get("id"),
+        "status": order.get("status"),
+        "filled_qty": order.get("filled_qty"),
+        "filled_avg_price": order.get("filled_avg_price"),
+        "detail": "sell_to_close submitted",
     }
 
 
@@ -233,6 +291,9 @@ def main() -> int:
         "regime": reg, "iv": iv_iwm, "positions": calls, "next_size": size,
         "actions": [c for c in calls if c["action"] != "HOLD"],
     }
+    cut = _execute_time_stop(calls, h)
+    if cut:
+        report["time_stop_cut"] = cut
     if args.json:
         # One record per line: the log is .jsonl and tail -1 must yield a whole
         # verdict. indent=2 here silently produced un-parseable append-only logs.
@@ -258,6 +319,8 @@ def main() -> int:
               f"IVP exit running on {iv_iwm.get('proxy')}")
     if not report["actions"]:
         print("  VERDICT: no action — checked, not assumed")
+    if report.get("time_stop_cut"):
+        print(f"  TIME-STOP CUT: {report['time_stop_cut']}")
     return 0
 
 

@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 
 from filltrue.agent import Agent
 from filltrue.broker import FakeBroker
 from filltrue.contest import (
     CONTEST_END,
+    TIME_STOP_AT,
+    TIME_STOP_SYMBOL,
     ContestPlan,
     Regime,
     contest_decide_exit,
@@ -15,6 +17,7 @@ from filltrue.contest import (
     contracts_for_risk,
     plan,
     refuse_lab_book,
+    thursday_call_time_stop,
 )
 from filltrue.policy import decide_exit as lab_decide_exit
 
@@ -67,6 +70,30 @@ def test_refuses_0dte_and_lab_tenor():
     assert contest_entry_ok(dte=21, abs_delta=0.30).ok
     assert not contest_entry_ok(dte=45, abs_delta=0.18).ok  # lab tenor
     assert not contest_entry_ok(dte=81, abs_delta=0.30).ok  # live Nov put is hold, not a template
+
+
+def test_thursday_call_time_stop_only_that_call_after_1pm_if_not_up():
+    before = datetime(2026, 9, 3, 12, 59, tzinfo=TIME_STOP_AT.tzinfo)
+    at = TIME_STOP_AT
+    after = datetime(2026, 9, 3, 13, 1, tzinfo=TIME_STOP_AT.tzinfo)
+    other = "IWM260918C00300000"
+    assert thursday_call_time_stop(
+        symbol=TIME_STOP_SYMBOL, entry=1.19, mark=1.00, now=before,
+    ) is None
+    assert thursday_call_time_stop(
+        symbol=other, entry=2.58, mark=1.13, now=at,
+    ) is None
+    assert thursday_call_time_stop(
+        symbol=TIME_STOP_SYMBOL, entry=1.19, mark=1.20, now=at,
+    ) is None  # it went up — keep
+    fire = thursday_call_time_stop(
+        symbol=TIME_STOP_SYMBOL, entry=1.19, mark=1.19, now=at,
+    )
+    assert fire is not None and "time-stop" in fire
+    fire_red = thursday_call_time_stop(
+        symbol=TIME_STOP_SYMBOL, entry=1.19, mark=1.00, now=after,
+    )
+    assert fire_red is not None and "1.00" in fire_red
 
 
 def test_refuses_lab_16_delta():

@@ -19,8 +19,9 @@ Official Alpaca submission rules (tweet 2092250645458047162, 2026-08-25):
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime
 from typing import Any, Literal
+from zoneinfo import ZoneInfo
 
 from filltrue.types import GateResult
 
@@ -45,6 +46,42 @@ DEBIT_TAKE_PROFIT_MULT = 1.80
 DEBIT_STOP_FRAC = 0.50
 # Flatten into the submission deadline; don't gift a Friday gap.
 FLATTEN_DTE = 3
+
+# Giani 2026-09-01: the Sep 10 296c (bought @ 1.19) is a gamma ticket, not a hold.
+# If it is not up vs entry by Thursday 1pm ET, cut it. Other legs are not on this clock.
+_ET = ZoneInfo("America/New_York")
+TIME_STOP_SYMBOL = "IWM260910C00296000"
+TIME_STOP_AT = datetime(2026, 9, 3, 13, 0, tzinfo=_ET)
+
+
+def thursday_call_time_stop(
+    *,
+    symbol: str,
+    entry: float,
+    mark: float,
+    now: datetime | None = None,
+) -> str | None:
+    """EXIT reason if the Thursday-1pm call time-stop fires, else None.
+
+    "Does not go up" = mark <= entry. A print of even a cent keeps it.
+    """
+    if symbol != TIME_STOP_SYMBOL:
+        return None
+    clock = now or datetime.now(_ET)
+    if clock.tzinfo is None:
+        clock = clock.replace(tzinfo=_ET)
+    else:
+        clock = clock.astimezone(_ET)
+    if clock < TIME_STOP_AT:
+        return None
+    if entry is None or mark is None or entry <= 0:
+        return None
+    if mark > entry:
+        return None
+    return (
+        f"Thursday 1pm time-stop — mark {mark:.2f} <= entry {entry:.2f} "
+        "(call did not go up)"
+    )
 
 def _envf(name: str, default: float) -> float:
     """Read a risk dial from the environment, falling back to the lab default.

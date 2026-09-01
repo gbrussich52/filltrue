@@ -86,6 +86,13 @@ a short you now own.
 holds for the right exit; the contest is scored on a snapshot, so sitting on a
 winner through Friday donates mark-to-market.
 
+**Thursday 1pm ET time-stop (Giani 2026-09-01):** the Sep 10 296c
+(`IWM260910C00296000`, entry $1.19) is a gamma ticket. If it is not up vs
+entry at 2026-09-03 13:00 ET, the monitor EXITs it and submits
+`sell_to_close` (market, RTH only, idempotent `client_order_id`). A print of
+even a cent keeps it. The Sep 18 300c and the Nov put are **not** on this
+clock.
+
 ## Friday 2026-09-04
 
 Score is a snapshot at 15:00 UTC. Flatten everything in the morning session.
