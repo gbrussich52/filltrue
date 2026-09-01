@@ -24,10 +24,12 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
 from filltrue.contest import (  # noqa: E402
+    cheap_vol_long_hold,
     dynamic_risk_frac,
     survival_cap,
     thursday_call_time_stop,
 )
+from filltrue.occ import parse_occ  # noqa: E402
 from ops.ivp import ivp as real_ivp  # noqa: E402
 
 TRADE = "https://paper-api.alpaca.markets/v2"
@@ -124,6 +126,13 @@ def evaluate(pos: dict, snap: dict, reg: dict, k: int, equity: float,
     iv_raw = snap.get("impliedVolatility")
     iv_now = iv_raw * 100 if iv_raw else None
     iv_txt = f"{iv_now:.1f}%" if iv_now is not None else "n/a"
+    try:
+        meta = parse_occ(pos["symbol"])
+        dte = (meta["expiration"] - dt.date.today()).days
+        is_put = meta["option_type"] == "put"
+    except ValueError:
+        dte, is_put = None, False
+    long_vol = cheap_vol_long_hold(dte=dte, ivp=ivp_now)
 
     if is_short:
         # A short is managed on its own arithmetic: profit is the credit
@@ -145,12 +154,14 @@ def evaluate(pos: dict, snap: dict, reg: dict, k: int, equity: float,
             act, why = "HOLD", f"short intact ({cost_mult:.2f}x credit, IV {iv_txt})"
     elif ratio >= TAKE_PROFIT_MULT:
         act, why = "EXIT", f"debit at {ratio:.2f}x entry (>= {TAKE_PROFIT_MULT}x) — bank it"
-    elif ratio <= STOP_FRAC:
+    elif ratio <= STOP_FRAC and not long_vol:
         act, why = "EXIT", f"premium halved ({ratio:.2f}x) — the move did not come"
-    elif not reg["SPY"]["above_200"]:
-        act, why = "EXIT", "SPY lost its 200d — the risk-on reason for a call debit is gone"
     elif ivp_now is not None and ivp_now >= IVP_EXIT:
         act, why = "EXIT", f"IVP {ivp_now:.0f} >= {IVP_EXIT:.0f} — vol is extreme, sell it"
+    elif not reg["SPY"]["above_200"] and not is_put:
+        act, why = "EXIT", "SPY lost its 200d — the risk-on reason for a call debit is gone"
+    elif not reg["SPY"]["above_200"] and is_put:
+        act, why = "HOLD", "crash brake — long put is the thesis, not an exit"
     elif (ts := thursday_call_time_stop(
         symbol=pos["symbol"], entry=entry, mark=mark,
     )):
@@ -165,7 +176,16 @@ def evaluate(pos: dict, snap: dict, reg: dict, k: int, equity: float,
     elif k == 1:
         act, why = "EXIT", "final session — the score is a snapshot, do not hold through it"
     else:
-        act, why = "HOLD", f"thesis intact ({ratio:.2f}x, SPY above 200d, IV {iv_txt})"
+        if long_vol:
+            act, why = "HOLD", (
+                f"low IVP {ivp_now:.1f} + {dte} DTE — cheap vol, let it play "
+                f"({ratio:.2f}x, IV {iv_txt})"
+            )
+        else:
+            act, why = "HOLD", (
+                f"thesis intact ({ratio:.2f}x, SPY above 200d, IVP {ivp_now:.1f}, "
+                f"IV {iv_txt})"
+            )
 
     # A per-leg EXIT on a spread closes one side and leaves the other naked.
     # A long wing decaying past 0.5x is the NORMAL case, so this fires on the
@@ -180,6 +200,7 @@ def evaluate(pos: dict, snap: dict, reg: dict, k: int, equity: float,
         "symbol": pos["symbol"], "qty": qty, "entry": entry, "mark": mark,
         "ratio": round(ratio, 3), "pnl": round(pnl, 2),
         "iv_now": round(iv_now, 1) if iv_now is not None else None,
+        "ivp": ivp_now, "dte": dte,
         "action": act, "why": why,
     }
 

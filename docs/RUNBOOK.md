@@ -86,6 +86,12 @@ a short you now own.
 holds for the right exit; the contest is scored on a snapshot, so sitting on a
 winner through Friday donates mark-to-market.
 
+**IVP pulse:** every 15 min the monitor reads RVX IVP. Low IVP + long
+expiry (DTE > 21) is a hold — cheap vol plays out on the long-dated contract,
+not on a 50% gamma stop. The Nov 20 285p is that ticket. Short calls still
+use the 50% stop + Thursday 1pm clock. Harvest the long-vol hold at IVP ≥ 90,
+not because a 5-day mark looks tired.
+
 **Thursday 1pm ET time-stop (Giani 2026-09-01):** the Sep 10 296c
 (`IWM260910C00296000`, entry $1.19) is a gamma ticket. If it is not up vs
 entry at 2026-09-03 13:00 ET, the monitor EXITs it and submits

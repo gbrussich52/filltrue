@@ -54,6 +54,17 @@ TIME_STOP_SYMBOL = "IWM260910C00296000"
 TIME_STOP_AT = datetime(2026, 9, 3, 13, 0, tzinfo=_ET)
 
 
+def cheap_vol_long_hold(*, dte: int | None, ivp: float | None) -> bool:
+    """Low IVP + long expiry is a hold. The 5-day 50% stop is for gamma tickets.
+
+    Cheap vol pays on the long-dated contract as it mean-reverts, not on a
+    7–21 DTE call that has to print before Friday. Giani 2026-09-01.
+    """
+    if dte is None or ivp is None:
+        return False
+    return ivp < IVP_LOW and dte > DTE_MAX
+
+
 def thursday_call_time_stop(
     *,
     symbol: str,

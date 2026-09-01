@@ -12,6 +12,7 @@ from filltrue.contest import (
     TIME_STOP_SYMBOL,
     ContestPlan,
     Regime,
+    cheap_vol_long_hold,
     contest_decide_exit,
     contest_entry_ok,
     contracts_for_risk,
@@ -70,6 +71,16 @@ def test_refuses_0dte_and_lab_tenor():
     assert contest_entry_ok(dte=21, abs_delta=0.30).ok
     assert not contest_entry_ok(dte=45, abs_delta=0.18).ok  # lab tenor
     assert not contest_entry_ok(dte=81, abs_delta=0.30).ok  # live Nov put is hold, not a template
+
+
+def test_cheap_vol_long_hold_is_long_expiry_only():
+    assert cheap_vol_long_hold(dte=80, ivp=1.6) is True
+    assert cheap_vol_long_hold(dte=81, ivp=29.9) is True
+    assert cheap_vol_long_hold(dte=9, ivp=1.6) is False   # Sep 10 296c is a gamma ticket
+    assert cheap_vol_long_hold(dte=17, ivp=1.6) is False  # Sep 18 300c still uses the 50% stop
+    assert cheap_vol_long_hold(dte=80, ivp=50) is False
+    assert cheap_vol_long_hold(dte=80, ivp=None) is False
+    assert cheap_vol_long_hold(dte=None, ivp=1.6) is False
 
 
 def test_thursday_call_time_stop_only_that_call_after_1pm_if_not_up():
