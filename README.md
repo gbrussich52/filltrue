@@ -8,6 +8,8 @@ Paper-only options on [Alpaca](https://alpaca.markets). Hands = [Alpaca MCP](htt
 
 FillTrue will not do that. **OPEN requires a true fill:** `filled_qty >= qty` and a positive `filled_avg_price`. Status words are rumors.
 
+**This bug, caught in the wild:** [`docs/CASE-STUDY.md`](docs/CASE-STUDY.md) — a sibling paper account ran the naive pattern for 49 days: 6 shorts that never existed, $895 spent closing them, one hypothesis that flips from 4L/2W to 0W/3L when rebuilt from the broker's ledger.
+
 **Demo (no keys):** https://gbrussich52.github.io/filltrue/  
 **Hackathon:** Alpaca Options Alpha Agents (2026-08-28 → 2026-09-04)
 
