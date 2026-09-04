@@ -107,6 +107,27 @@ clock.
 Score is a snapshot at 15:00 UTC. Flatten everything in the morning session.
 Submitting at 11:00 ET means the Friday morning session is your last.
 
+**The call (Giani, 2026-09-03, book +$1,753):** *"if it's not negative we should
+cut it before 11."* The book is green on one 7-DTE call carrying the whole
+result; holding it through the snapshot is the risk, not the reward.
+
+```
+./ops/flatten.py             # the plan, nothing sent
+./ops/flatten.py --execute   # inside RTH only
+```
+
+A backstop job (`ops/flatten_backstop.sh`, `com.giani.filltrue-flatten`) fires
+once at **10:30 ET** and runs `--execute` if anything is still open, then posts
+the result to Discord and unloads itself. It exists because the decision's only
+failure mode is nobody being at a keyboard — the 09:30-10:30 window is still
+yours, and if you flatten by hand the backstop finds nothing to do. To cancel
+it: `launchctl bootout gui/$(id -u)/com.giani.filltrue-flatten`.
+
+It is deliberately **not** in `docs/loop/registry.json`: it deletes its own
+plist on the way out, so a registry entry would be a permanent `plist-missing`
+critical in loop-health from Saturday onward. One-shots that retire themselves
+belong in a runbook, not a registry of recurring jobs.
+
 ## Refusals you should expect to see
 
 | Message | Meaning |

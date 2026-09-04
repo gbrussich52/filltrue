@@ -1,0 +1,61 @@
+#!/bin/bash
+# One-shot deadline backstop. Fires 10:30 ET Fri 2026-09-04 — 30 minutes of
+# margin before the 15:00 UTC scoring snapshot.
+#
+# Giani's call (2026-09-03, book +$1,753): "if it's not negative we should cut
+# it before 11." The only way that decision fails is nobody being at a keyboard,
+# so this is the floor under it, not a replacement for it. He keeps the whole
+# 09:30-10:30 window to run ./ops/flatten.py --execute himself; if he does,
+# there are no positions left and this exits having done nothing.
+#
+# Refuses to act on any day but the deadline, and unloads itself either way, so
+# a fire that arrives late can never submit orders into an unrelated market.
+set -uo pipefail
+cd "$(dirname "$0")/.." || exit 1
+mkdir -p ops/logs
+LOG=ops/logs/flatten-backstop.log
+DEADLINE=2026-09-04
+ts() { date -u +%FT%TZ; }
+say() { echo "$(ts) $*" >> "$LOG"; }
+
+unload_self() {
+  launchctl bootout "gui/$(id -u)/com.giani.filltrue-flatten" 2>>ops/logs/launchd.err || true
+  rm -f "$HOME/Library/LaunchAgents/com.giani.filltrue-flatten.plist"
+}
+
+# A one-shot that wakes on the wrong day does nothing but retire. launchd fires
+# a missed StartCalendarInterval late (on wake from sleep, for instance), and
+# "late" here could mean a Monday with a live book.
+if [ "$(date +%F)" != "$DEADLINE" ]; then
+  say "not the deadline (today=$(date +%F), deadline=$DEADLINE) — retiring without acting"
+  unload_self
+  exit 0
+fi
+
+set -a; [ -f ops/.env ] && . ops/.env; set +a
+
+out="$(./ops/flatten.py --execute 2>&1)"; rc=$?
+say "flatten --execute exit=$rc"
+echo "$out" >> "$LOG"
+
+REPO="$HOME/project-claude"
+if source "$REPO/agent-runtime/lib/util.sh" 2>/dev/null && source "$REPO/agent-runtime/lib/discord.sh" 2>/dev/null; then
+  if [ "$rc" -eq 0 ]; then
+    msg="**FillTrue flattened** (10:30 ET backstop, exit 0) — every leg filled and confirmed against the broker. Nothing open into the 11:00 snapshot.
+\`\`\`
+$(echo "$out" | tail -20)
+\`\`\`"
+  else
+    msg="**FillTrue flatten INCOMPLETE — exit $rc.** At least one leg did not fill. You have until 11:00 ET. Run \`cd ~/project-claude/filltrue && ./ops/flatten.py --execute\` and see what is still open.
+\`\`\`
+$(echo "$out" | tail -20)
+\`\`\`"
+  fi
+  if chan="$(discord_channel)"; then
+    discord_post "$chan" "$msg" >/dev/null || say "warn: Discord not delivered"
+  else say "warn: no Discord channel resolved"; fi
+else say "warn: agent-runtime discord lib unavailable"; fi
+
+unload_self
+say "retired"
+exit "$rc"
