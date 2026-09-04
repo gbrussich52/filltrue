@@ -23,11 +23,21 @@ unload_self() {
   rm -f "$HOME/Library/LaunchAgents/com.giani.filltrue-flatten.plist"
 }
 
-# A one-shot that wakes on the wrong day does nothing but retire. launchd fires
-# a missed StartCalendarInterval late (on wake from sleep, for instance), and
-# "late" here could mean a Monday with a live book.
-if [ "$(date +%F)" != "$DEADLINE" ]; then
-  say "not the deadline (today=$(date +%F), deadline=$DEADLINE) — retiring without acting"
+# Never trade on a day that is not the deadline. The two wrong-day cases are
+# not the same, and collapsing them is a bug:
+#
+#   before — an early wake must stand by, NOT unload. Retiring here would
+#            silently disarm the job and the 10:30 backstop never fires.
+#   after  — launchd replays a missed StartCalendarInterval on wake from
+#            sleep, so a late fire could land on a Monday with a live book.
+#            That one retires for good.
+TODAY=$(date +%F)
+if [[ "$TODAY" < "$DEADLINE" ]]; then
+  say "before the deadline (today=$TODAY) — standing by, still armed for $DEADLINE"
+  exit 0
+fi
+if [ "$TODAY" != "$DEADLINE" ]; then
+  say "past the deadline (today=$TODAY) — retiring without acting"
   unload_self
   exit 0
 fi
