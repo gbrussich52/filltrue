@@ -20,9 +20,13 @@ DEADLINE=2026-09-04
 ts() { date -u +%FT%TZ; }
 say() { echo "$(ts) $*" >> "$LOG"; }
 
+# Which job am I? The 10:00 primary and the 10:20 retry share this script, and
+# each must retire only itself.
+LABEL="${FILLTRUE_FLATTEN_LABEL:-com.giani.filltrue-flatten}"
+
 unload_self() {
-  launchctl bootout "gui/$(id -u)/com.giani.filltrue-flatten" 2>>ops/logs/launchd.err || true
-  rm -f "$HOME/Library/LaunchAgents/com.giani.filltrue-flatten.plist"
+  launchctl bootout "gui/$(id -u)/$LABEL" 2>>ops/logs/launchd.err || true
+  rm -f "$HOME/Library/LaunchAgents/$LABEL.plist"
 }
 
 # Never trade on a day that is not the deadline. The two wrong-day cases are
@@ -46,14 +50,25 @@ fi
 
 set -a; [ -f ops/.env ] && . ops/.env; set +a
 
-out="$(./ops/flatten.py --execute 2>&1)"; rc=$?
-say "flatten --execute exit=$rc"
+# Call the venv interpreter explicitly, exactly as monitor_run.sh does.
+# `./ops/flatten.py` was two separate silent no-ops: the file is not +x (exit
+# 126), and its #!/usr/bin/env python3 shebang resolves to the system python,
+# which has no `requests`. Either one would have made the 10:00 fire do
+# nothing at all while still retiring the job. Found 2026-09-04 by running
+# this script on deadline day.
+PY_BIN=../automated-trading/.venv/bin/python
+if [ ! -x "$PY_BIN" ]; then
+  say "FATAL: interpreter $PY_BIN missing — cannot flatten, leaving job armed"
+  exit 1
+fi
+out="$("$PY_BIN" ops/flatten.py --execute 2>&1)"; rc=$?
+say "[$LABEL] flatten --execute exit=$rc"
 echo "$out" >> "$LOG"
 
 REPO="$HOME/project-claude"
 if source "$REPO/agent-runtime/lib/util.sh" 2>/dev/null && source "$REPO/agent-runtime/lib/discord.sh" 2>/dev/null; then
   if [ "$rc" -eq 0 ]; then
-    msg="**FillTrue flattened** (10:30 ET backstop, exit 0) — every leg filled and confirmed against the broker. Nothing open into the 11:00 snapshot.
+    msg="**FillTrue flattened** [$LABEL] (10:30 ET backstop, exit 0) — every leg filled and confirmed against the broker. Nothing open into the 11:00 snapshot.
 \`\`\`
 $(echo "$out" | tail -20)
 \`\`\`"
