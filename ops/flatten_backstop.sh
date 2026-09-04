@@ -20,6 +20,20 @@ DEADLINE=2026-09-04
 ts() { date -u +%FT%TZ; }
 say() { echo "$(ts) $*" >> "$LOG"; }
 
+# One place that talks to Giani, so every exit path is equally loud and the
+# message says which of the three things happened: the book closed, the book
+# failed to close, or the script broke without touching the book.
+notify() {
+  local REPO="$HOME/project-claude"
+  if source "$REPO/agent-runtime/lib/util.sh" 2>/dev/null \
+     && source "$REPO/agent-runtime/lib/discord.sh" 2>/dev/null; then
+    local chan
+    if chan="$(discord_channel)"; then
+      discord_post "$chan" "$1" >/dev/null || say "warn: Discord not delivered"
+    else say "warn: no Discord channel resolved"; fi
+  else say "warn: agent-runtime discord lib unavailable"; fi
+}
+
 # Which job am I? The 10:00 primary and the 10:20 retry share this script, and
 # each must retire only itself.
 LABEL="${FILLTRUE_FLATTEN_LABEL:-com.giani.filltrue-flatten}"
@@ -61,28 +75,49 @@ if [ ! -x "$PY_BIN" ]; then
   say "FATAL: interpreter $PY_BIN missing — cannot flatten, leaving job armed"
   exit 1
 fi
+# Preflight the session before touching anything. Listed equity/ETF options
+# trade regular hours only — there is no pre- or post-market options session
+# — so "closed" is a hard stop, not a thing to retry through. It is also NOT
+# a failure, and must not page like one: on 2026-09-04 a self-inflicted exit
+# 126 fired the same "flatten INCOMPLETE" alarm that a genuinely unfilled leg
+# would, and read as though the book had failed to close.
+clock_msg="$("$PY_BIN" ops/market_open.py 2>&1)"; clock_rc=$?
+say "[$LABEL] market check: $clock_msg"
+if [ "$clock_rc" -eq 10 ]; then
+  say "[$LABEL] market closed — nothing submitted, staying armed"
+  notify "FillTrue flatten **skipped — market closed** ($clock_msg). No orders sent, job still armed. Options have no extended session, so this waits for the bell."
+  exit 0
+fi
+if [ "$clock_rc" -ne 0 ]; then
+  say "[$LABEL] cannot determine session — refusing to trade blind"
+  notify "**FillTrue flatten BLOCKED — cannot reach the market clock.** ($clock_msg) Nothing was sent and the job is still armed. This is infrastructure, not the book."
+  exit 1
+fi
+
 out="$("$PY_BIN" ops/flatten.py --execute 2>&1)"; rc=$?
 say "[$LABEL] flatten --execute exit=$rc"
 echo "$out" >> "$LOG"
 
-REPO="$HOME/project-claude"
-if source "$REPO/agent-runtime/lib/util.sh" 2>/dev/null && source "$REPO/agent-runtime/lib/discord.sh" 2>/dev/null; then
-  if [ "$rc" -eq 0 ]; then
-    msg="**FillTrue flattened** [$LABEL] (10:30 ET backstop, exit 0) — every leg filled and confirmed against the broker. Nothing open into the 11:00 snapshot.
+tail20="$(echo "$out" | tail -20)"
+case "$rc" in
+  0) notify "**FillTrue flattened** [$LABEL] — every leg filled and confirmed at the broker. Nothing open into the 11:00 snapshot.
 \`\`\`
-$(echo "$out" | tail -20)
+$tail20
 \`\`\`"
-  else
-    msg="**FillTrue flatten INCOMPLETE — exit $rc.** At least one leg did not fill. You have until 11:00 ET. Run \`cd ~/project-claude/filltrue && ./ops/flatten.py --execute\` and see what is still open.
+     unload_self
+     say "[$LABEL] flat — retired"
+     exit 0 ;;
+  1) notify "**FillTrue flatten INCOMPLETE — a leg did not fill.** This is the book, not the plumbing. You have until 11:00 ET. \`cd ~/project-claude/filltrue && ../automated-trading/.venv/bin/python ops/flatten.py --execute\`
 \`\`\`
-$(echo "$out" | tail -20)
+$tail20
 \`\`\`"
-  fi
-  if chan="$(discord_channel)"; then
-    discord_post "$chan" "$msg" >/dev/null || say "warn: Discord not delivered"
-  else say "warn: no Discord channel resolved"; fi
-else say "warn: agent-runtime discord lib unavailable"; fi
+     say "[$LABEL] unfilled leg(s) — staying armed"
+     exit 1 ;;
+  *) notify "**FillTrue flatten ERROR (exit $rc) — the script broke, the book is untouched.** No orders were placed by this run. Staying armed; the 10:20 retry is the next attempt.
+\`\`\`
+$tail20
+\`\`\`"
+     say "[$LABEL] script failure exit=$rc — staying armed"
+     exit "$rc" ;;
+esac
 
-unload_self
-say "retired"
-exit "$rc"

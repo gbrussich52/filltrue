@@ -139,5 +139,9 @@ belong in a runbook, not a registry of recurring jobs.
 | `forbidden_account` | The key fingerprints to a listed account. Wrong account — stop. |
 | `lab_account` | The account holds research ETF **stock** (SPY/VEA/BND/BIL/VTI/AGG). Wrong account. |
 | `session_closed` | A new DAY limit outside the session would ghost. Refused on purpose. |
+| `flatten skipped — market closed` | The 10:00 job woke outside RTH. Listed options have **no** pre- or post-market session (Alpaca rejects any options order with `extended_hours=true`), so this waits for the bell rather than retrying. Not a failure, and deliberately not an alarm. |
+| `flatten BLOCKED — cannot reach the market clock` | Infrastructure, not the book. Nothing was sent; the job stays armed. |
+| `flatten ERROR (exit N)` | The script broke without touching the book. No orders placed. Distinct from INCOMPLETE on purpose. |
+| `flatten INCOMPLETE` | The only one that means real open exposure: an order worked and a leg still did not fill. |
 
 None of these are bugs. Each is a trade that should not happen.
