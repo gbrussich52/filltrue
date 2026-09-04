@@ -4,10 +4,11 @@
 # so the spreads it has to cross have settled.
 #
 # Giani's call (2026-09-03, book +$1,753): "if it's not negative we should cut
-# it before 11." The only way that decision fails is nobody being at a keyboard,
-# so this is the floor under it, not a replacement for it. He keeps the whole
-# 09:30-10:30 window to run ./ops/flatten.py --execute himself; if he does,
-# there are no positions left and this exits having done nothing.
+# it before 11." Then on 09-04: "you can do it. The whole reason I wanted to do
+# this was to automate it and have it run by you/grok." So this is the primary
+# path, not a fallback — no human step on the last morning. If he happens to
+# run ./ops/flatten.py --execute himself first, there are no positions left and
+# this exits having done nothing.
 #
 # Refuses to act on any day but the deadline, and unloads itself either way, so
 # a fire that arrives late can never submit orders into an unrelated market.
