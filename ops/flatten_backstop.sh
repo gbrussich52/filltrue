@@ -1,6 +1,7 @@
 #!/bin/bash
-# One-shot deadline backstop. Fires 10:30 ET Fri 2026-09-04 — 30 minutes of
-# margin before the 15:00 UTC scoring snapshot.
+# One-shot deadline flatten. Fires 10:00 ET Fri 2026-09-04 — a full hour of
+# margin before the 15:00 UTC scoring snapshot, and 30 minutes after the open
+# so the spreads it has to cross have settled.
 #
 # Giani's call (2026-09-03, book +$1,753): "if it's not negative we should cut
 # it before 11." The only way that decision fails is nobody being at a keyboard,

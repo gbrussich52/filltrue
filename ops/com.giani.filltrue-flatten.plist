@@ -14,7 +14,7 @@
     <key>Month</key><integer>9</integer>
     <key>Day</key><integer>4</integer>
     <key>Hour</key><integer>10</integer>
-    <key>Minute</key><integer>30</integer>
+    <key>Minute</key><integer>0</integer>
   </dict>
   <key>WorkingDirectory</key><string>/Users/gianibrussich/project-claude/filltrue</string>
   <key>StandardOutPath</key><string>/Users/gianibrussich/project-claude/filltrue/ops/logs/flatten-backstop.out</string>

@@ -116,12 +116,15 @@ result; holding it through the snapshot is the risk, not the reward.
 ./ops/flatten.py --execute   # inside RTH only
 ```
 
-A backstop job (`ops/flatten_backstop.sh`, `com.giani.filltrue-flatten`) fires
-once at **10:30 ET** and runs `--execute` if anything is still open, then posts
-the result to Discord and unloads itself. It exists because the decision's only
-failure mode is nobody being at a keyboard — the 09:30-10:30 window is still
-yours, and if you flatten by hand the backstop finds nothing to do. To cancel
-it: `launchctl bootout gui/$(id -u)/com.giani.filltrue-flatten`.
+**This runs itself.** Giani, 2026-09-04: *"you can do it. The whole reason I
+wanted to do this was to automate it and have it run by you/grok."* So
+`ops/flatten_backstop.sh` (`com.giani.filltrue-flatten`) fires once at **10:00
+ET**, runs `--execute`, posts the outcome to Discord, and unloads itself. No
+human step. 10:00 is 30 minutes after the open, so the spreads it crosses have
+settled, and a full hour before the snapshot, so there is room to intervene if
+it reports trouble. Running the commands above by hand beforehand is optional
+and makes the job a no-op. To cancel it:
+`launchctl bootout gui/$(id -u)/com.giani.filltrue-flatten`.
 
 It is deliberately **not** in `docs/loop/registry.json`: it deletes its own
 plist on the way out, so a registry entry would be a permanent `plist-missing`
